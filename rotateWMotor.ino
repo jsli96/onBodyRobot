@@ -2,9 +2,6 @@
  * Smooth Rotation Demo (Software-based)
  * Using ICM-20948 Accelerometer for tilt angle,
  * PNGdec for image decode, and software rotation of a full framebuffer.
- *
- * WARNING: Requires ~112 KB for a 240x240 buffer (2 bytes/pixel).
- * May not fit on SAMD21-based Seeed XIAO. Consider using ESP32 or similar.
  ***************************************************************************/
 
 #include <TFT_eSPI.h>
@@ -56,9 +53,9 @@ typedef struct {
   bool convertTo565;
 } USERDATA;
 
-//----------------------------------------------------------------------------------
+
 // PNG Callback: decode each line into rawImage[]
-//----------------------------------------------------------------------------------
+
 void PNGDrawCallback(PNGDRAW *pDraw)
 {
   if (pDraw->y >= 240) return; // safety check
@@ -74,9 +71,9 @@ void PNGDrawCallback(PNGDRAW *pDraw)
   );
 }
 
-//----------------------------------------------------------------------------------
+
 // Show image: decode the PNG into rawImage[] (no rotation yet)
-//----------------------------------------------------------------------------------
+
 void showImage(int index) {
   SERIAL_PORT.println("Attempting to decode image...");
   int rc = png.openFLASH((uint8_t *)images[index], imageSizes[index], PNGDrawCallback);
@@ -97,9 +94,9 @@ void showImage(int index) {
   }
 }
 
-//----------------------------------------------------------------------------------
+
 // Check Swipe
-//----------------------------------------------------------------------------------
+
 void checkSwipe() {
   const int SWIPE_THRESHOLD = 30;
   int deltaX = lastX - startX;
@@ -123,9 +120,9 @@ void checkSwipe() {
   }
 }
 
-//----------------------------------------------------------------------------------
+
 // Compute tilt angle from accelerometer
-//----------------------------------------------------------------------------------
+
 float readTiltAngle() {
   if (myICM.dataReady()) {
     myICM.getAGMT(); // update accelerometer
@@ -146,12 +143,12 @@ float readTiltAngle() {
   return angle;
 }
 
-//----------------------------------------------------------------------------------
+
 // drawRotated(angle):
 //   Takes the data in rawImage[] (16-bit, up to 240x240),
 //   rotates it by 'angle' degrees around the center,
 //   then draws to the screen.
-//----------------------------------------------------------------------------------
+
 void drawRotated(float angleDeg)
 {
   float angleRad = angleDeg * (PI / 180.0);
@@ -190,16 +187,10 @@ void drawRotated(float angleDeg)
   }
 }
 
-//----------------------------------------------------------------------------------
-// Global variables for controlling rotation update timing
-//----------------------------------------------------------------------------------
 float lastAngle = -1;
 unsigned long lastRotationUpdate = 0;
 const int ROTATION_UPDATE_INTERVAL = 300; // ms
 
-//----------------------------------------------------------------------------------
-// *** "Main" setup for Display/Touch/IMU Program ***
-//----------------------------------------------------------------------------------
 void setup() {
   Serial.begin(115200);
   delay(500);
@@ -230,16 +221,12 @@ void setup() {
   // Show first image
   showImage(currentImageIndex);
 
-  // --------------------------------------------------
-  // Call the Motor Control setup next
-  // (Renamed setupMotorControl())
-  // --------------------------------------------------
   setupMotorControl();
 }
 
-//----------------------------------------------------------------------------------
+
 // *** "Main" loop for Display/Touch/IMU Program ***
-//----------------------------------------------------------------------------------
+
 void loop() {
   bool isPressed = chsc6x_is_pressed();
 
@@ -276,19 +263,8 @@ void loop() {
   // 3) Slight delay
   delay(20);
 
-  // --------------------------------------------------
-  // Call the Motor Control loop next
-  // (Renamed loopMotorControl())
-  // --------------------------------------------------
   loopMotorControl();
 }
-
-// -----------------------------------------------------
-//        PART B:  Motor Control Program
-//        (Your first program, unmodified EXCEPT for
-//         renaming setup() -> setupMotorControl()
-//         and loop() -> loopMotorControl().)
-// -----------------------------------------------------
 
 // Define motor control pins for DRV8833
 #define MOTOR_IN1 D0  // Connect to IN1 on DRV8833
@@ -297,9 +273,9 @@ void loop() {
 int speedValue = 0; 
 String command = ""; 
 
-// --------------------------------------------------
+
 // (Renamed) setup() -> setupMotorControl()
-// --------------------------------------------------
+
 void setupMotorControl() {
     pinMode(MOTOR_IN1, OUTPUT);
     pinMode(MOTOR_IN2, OUTPUT);
@@ -312,9 +288,9 @@ void setupMotorControl() {
     Serial.println("'S' - Stop motor");
 }
 
-// --------------------------------------------------
+
 // (Renamed) loop() -> loopMotorControl()
-// --------------------------------------------------
+
 void loopMotorControl() {
     if (Serial.available() > 0) {
         command = Serial.readStringUntil('\n');
@@ -372,7 +348,3 @@ int getSpeed(String cmd) {
     }
     return 0; // Default to 0 if no speed provided
 }
-
-/*******************************************************
- *******************   END MERGED CODE   ***************
- *******************************************************/
