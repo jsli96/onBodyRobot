@@ -63,18 +63,16 @@ const char* ssid = "atp236";
 const char* password = "88888888";
 
 // Pixel setup
-#define LEDS_COUNT 4
-#define LEDS_PIN 6
-Adafruit_NeoPixel on_board_led(1, 21, NEO_RGB);
-Adafruit_NeoPixel strip_led(LEDS_COUNT, LEDS_PIN, NEO_GRB);  // Note R/G are reversed compared to onboard LED
+// #define LEDS_COUNT 4
+// #define LEDS_PIN 6
+// Adafruit_NeoPixel on_board_led(1, 21, NEO_RGB);
+// Adafruit_NeoPixel strip_led(LEDS_COUNT, LEDS_PIN, NEO_GRB);  // Note R/G are reversed compared to onboard LED
 
 AsyncWebServer server(80);
 String ipAddr;
 
 // Calico setup
 
-// GPIO pins for motor control - we now support two robot models - see below
-// Initialize to Model B - current
 
 #define MOTOR_IN1 14  // MCP23017 Pin D3
 #define MOTOR_IN2 15  // MCP23017 Pin D4
@@ -229,102 +227,6 @@ unsigned long lastRotationUpdate = 0;
 const int ROTATION_UPDATE_INTERVAL = 300; // ms
 
 
-
-// setColor - set color of onboard and LED strip
-void setColor(uint32_t c) {
-  on_board_led.setPixelColor(0, c);
-  strip_led.fill(c);
-  on_board_led.show();
-  strip_led.show();
-}
-
-// TODO: Convert this to a fade up and down of blue... and call it from the lightign task... and create a button
-// fadeColorOff - fade off over duration of time
-// Use of vTaskDelay won't necessarily provide a consistent frequency - can use vTaskDelayUntil if needed
-void fadeColorUp(int dur) {
-
-  int iters = dur / 50;
-  if (iters < 1) iters = 1;
-  int inc_r = rrr / iters;
-  int inc_g = ggg / iters;
-  int inc_b = bbb / iters;
-  int cur_r = 0;
-  int cur_g = 0;
-  int cur_b = 0;
-  for (int i = 0; i < iters; i++) {
-    cur_r += inc_r;
-    cur_g += inc_g;
-    cur_b += inc_b;
-    setColor(Adafruit_NeoPixel::Color(cur_r, cur_g, cur_b));
-    vTaskDelay(50 / portTICK_PERIOD_MS);  // converts msecs to ticks
-  }
-}
-
-void fadeColorDown(int dur) {
-
-  int iters = dur / 50;
-  if (iters < 1) iters = 1;
-  int inc_r = rrr / iters;
-  int inc_g = ggg / iters;
-  int inc_b = bbb / iters;
-  int cur_r = rrr;
-  int cur_g = ggg;
-  int cur_b = bbb;
-  for (int i = 0; i < iters; i++) {
-    cur_r -= inc_r;
-    cur_g -= inc_g;
-    cur_b -= inc_b;
-    setColor(Adafruit_NeoPixel::Color(cur_r, cur_g, cur_b));
-    vTaskDelay(50 / portTICK_PERIOD_MS);  // converts msecs to ticks
-  }
-}
-
-// Lighting task setup
-// Uses global var ledStatus as state variable
-void lightingTask(void* parameters) {
-    Serial.print("Lighting task running on core ");
-    Serial.println(xPortGetCoreID());
-
-    while (true) {
-        if (ledStatus == "Off") {
-            on_board_led.clear();
-            strip_led.clear();
-            on_board_led.show();
-            strip_led.show();
-        } 
-        else if (ledStatus == "light") {
-            if (br <= 0 || br > 4000) {  // Non-blinking mode
-                setColor(Adafruit_NeoPixel::Color(rrr, ggg, bbb));
-            } else {  // Blinking mode
-                setColor(Adafruit_NeoPixel::Color(rrr, ggg, bbb));
-                vTaskDelay(pdMS_TO_TICKS(br));
-                on_board_led.clear();
-                strip_led.clear();
-                on_board_led.show();
-                strip_led.show();
-                vTaskDelay(pdMS_TO_TICKS(br));
-            }
-        } 
-        else if (ledStatus == "multicolor") {
-            setColor(Adafruit_NeoPixel::Color(255, 0, 0));
-            vTaskDelay(pdMS_TO_TICKS(200));
-            setColor(Adafruit_NeoPixel::Color(0, 255, 0));
-            vTaskDelay(pdMS_TO_TICKS(200));
-            setColor(Adafruit_NeoPixel::Color(0, 0, 255));
-            vTaskDelay(pdMS_TO_TICKS(100)); // Reduced to 100ms
-
-        } 
-        else if (ledStatus == "pulsate") {
-            fadeColorUp(br);
-            fadeColorDown(br);
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(100));  
-    }
-}
-
-
-
 void setup() {
   Serial.begin(115200);
   delay(500);
@@ -337,18 +239,12 @@ void setup() {
   Serial.print("Setup task running on core ");
   Serial.println(xPortGetCoreID());
 
-  // LED setup
-  on_board_led.begin();
-  on_board_led.clear();
-  on_board_led.setPixelColor(0, 0xFF0000);
-  on_board_led.show();
-
   // Connect to Wi-Fi show network with SSID and password
   Serial.print("Connecting to show network:");
   Serial.println(ssid);
   WiFi.begin(ssid, password);
   int tries = 0;
-  setColor(0x020000);
+  //setColor(0x020000);
   while (WiFi.status() != WL_CONNECTED && tries < 6) {
     vTaskDelay(500 / portTICK_PERIOD_MS);  // Use non-blocking delay
     tries++;
@@ -357,7 +253,7 @@ void setup() {
 
   // Dev network
   if (WiFi.status() != WL_CONNECTED) {
-    setColor(0x000200);
+    //setColor(0x000200);
     WiFi.disconnect();
     Serial.print("\nConnecting to dev network: ");
     Serial.println(ssid_dev);
@@ -422,8 +318,9 @@ void setup() {
   });
 
   server.on("/move/forward", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println("Forward");
     moveForward();
+    Serial.println("Forward");
+    
     request->send(200, "text/plain", "Move forward");
   });
 
@@ -460,131 +357,6 @@ void setup() {
     request->send(200, "text/plain", "Vibe 2 executed");
   });
 
-
-  // // Stop and turn off lights
-  // server.on("/alloff", HTTP_GET, [](AsyncWebServerRequest *request){
-  //   Serial.println("ALL OFF");
-  //   ledStatus = "Off";
-  //   moveStatus = "stop";
-  //   digitalWrite(output8, HIGH);
-  //   digitalWrite(output7, HIGH);
-  //   digitalWrite(output12, HIGH);
-  //   digitalWrite(output11, HIGH);
-  //   request->send(200, "text/plain", "All systems off");
-  // });
-
-  // Lighting control
-  server.on("/led/multicolor", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println("Multicolor");
-    ledStatus = "multicolor";
-    request->send(200, "text/plain", "LED set to multicolor");
-  });
-
-  server.on("/led/pulseslow", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println("Pulse slow");
-    ledStatus = "pulsate";
-    br = 1200;
-    request->send(200, "text/plain", "LED pulse slow");
-  });
-
-  server.on("/led/pulsemedium", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println("Pulse medium");
-    ledStatus = "pulsate";
-    br = 600;
-    request->send(200, "text/plain", "LED pulse medium");
-  });
-
-  server.on("/led/pulsefast", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println("Pulse fast");
-    ledStatus = "pulsate";
-    br = 200;
-    request->send(200, "text/plain", "LED pulse fast");
-  });
-
-  server.on("/led/blinkslow", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println("Blink slow");
-    ledStatus = "light";
-    br = 1200;
-    request->send(200, "text/plain", "LED blink slow");
-  });
-
-  server.on("/led/blinkmedium", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println("Blink medium");
-    ledStatus = "light";
-    br = 600;
-    request->send(200, "text/plain", "LED blink medium");
-  });
-
-  server.on("/led/blinkfast", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println("Blink fast");
-    ledStatus = "light";
-    br = 200;
-    request->send(200, "text/plain", "LED blink fast");
-  });
-
-  server.on("/led/solid", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println("Solid");
-    ledStatus = "light";
-    br = 0;
-    request->send(200, "text/plain", "LED solid");
-  });
-
-  server.on("/led/red", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println("Red");
-    ledStatus = "light";
-    br = 0;
-    rrr = 255;
-    ggg = 0;
-    bbb = 0;
-    request->send(200, "text/plain", "LED red");
-  });
-
-  server.on("/led/green", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println("Green");
-    ledStatus = "light";
-    br = 0;
-    rrr = 0;
-    ggg = 255;
-    bbb = 0;
-    request->send(200, "text/plain", "LED green");
-  });
-
-  server.on("/led/blue", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println("Blue");
-    ledStatus = "light";
-    br = 0;
-    rrr = 0;
-    ggg = 0;
-    bbb = 255;
-    request->send(200, "text/plain", "LED blue");
-  });
-
-  server.on("/led/white", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println("White");
-    ledStatus = "light";
-    br = 0;
-    rrr = 255;
-    ggg = 255;
-    bbb = 0xF0;
-    request->send(200, "text/plain", "LED white");
-  });
-
-  server.on("/led/nightlight", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println("Night light");
-    ledStatus = "light";
-    br = 0;
-    rrr = 25;
-    ggg = 25;
-    bbb = 20;
-    request->send(200, "text/plain", "LED nightlight");
-  });
-
-  server.on("/led/off", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println("Light off");
-    ledStatus = "Off";
-    request->send(200, "text/plain", "LED off");
-  });
-
   server.on("/setDuration", HTTP_GET, [](AsyncWebServerRequest *request) {
       if (request->hasParam("value")) {
           String value = request->getParam("value")->value();
@@ -599,30 +371,7 @@ void setup() {
 
   server.begin();
   Serial.println("called server.begin()");
-  on_board_led.setPixelColor(0, 0x00FF00);
-  on_board_led.show();
-  strip_led.begin();
-  strip_led.clear();
 
-  // Light task initiation
-  vTaskDelay(1000 / portTICK_PERIOD_MS);  // Replaced delay(1000)
-
-  xTaskCreatePinnedToCore(
-    lightingTask,    // task function name
-    "lightingTask",  // description
-    100000,          // stack size in bytes - make it big for now (currently using about 33kB)
-    NULL,            // parameters - not used
-    1,               // priority - changed from 0 to 1, slightly higher priority
-    NULL,            // task handle - not used
-    0                // pin task to core 0
-  );
-  vTaskDelay(500 / portTICK_PERIOD_MS);  // Replaced delay(500)
-  Serial.println("Created lightingTask()");
-
-  ledStatus = "light";
-  rrr = 0;
-  ggg = 0;
-  bbb = 255;
 }
 
 String generateWebpage() {
@@ -926,17 +675,11 @@ String generateWebpage() {
 }
 
 // -----------------------------------------------------
-//        PART B:  Motor Control Program
-//        (Your first program, unmodified EXCEPT for
-//         renaming setup() -> setupMotorControl()
-//         and loop() -> loopMotorControl().)
+//        Motor Control Program
 // -----------------------------------------------------
 
 String command = ""; 
 
-// --------------------------------------------------
-// (Renamed) setup() -> setupMotorControl()
-// --------------------------------------------------
 void setupMotorControl() {
     // Ensure I2C is initialized once in the main setup()
     if (!mcp.begin_I2C(0x20)) {  // Initialize MCP23017 at address 0x20
@@ -953,36 +696,6 @@ void setupMotorControl() {
 }
 
 
-
-// --------------------------------------------------
-// (Renamed) loop() -> loopMotorControl()
-// --------------------------------------------------
-void loopMotorControl() {
-    if (Serial.available() > 0) {
-        command = Serial.readStringUntil('\n');
-        command.trim();
-
-        // Handle Forward Command
-        if (command.startsWith("F")) {
-            moveForward();
-            Serial.print("Moving Forward at Speed: ");
-        }
-        // Handle Backward Command
-        else if (command.startsWith("B")) {
-            moveBackward();
-            Serial.print("Moving Backward at Speed: ");
-        }
-        // Handle Stop Command
-        else if (command.equalsIgnoreCase("S")) {
-            stopMotor();
-            Serial.println("Motor Stopped.");
-        }
-        else {
-            Serial.println("Invalid Command! Use 'F <speed>', 'B <speed>', or 'S'");
-        }
-    }
-}
-
 void moveForward() {
     mcp.digitalWrite(MOTOR_IN1, HIGH);
     mcp.digitalWrite(MOTOR_IN2, LOW);
@@ -998,11 +711,8 @@ void stopMotor() {
     mcp.digitalWrite(MOTOR_IN2, LOW);
 }
 
-
-
 void loop() {
   bool isPressed = chsc6x_is_pressed();
-
   // 1) Handle swipe
   if (isPressed) {
     lv_coord_t x, y;
@@ -1035,10 +745,4 @@ void loop() {
 
   // 3) Slight delay
   delay(20);
-
-  // --------------------------------------------------
-  // Call the Motor Control loop next
-  // (Renamed loopMotorControl())
-  // --------------------------------------------------
-  loopMotorControl();
 }
