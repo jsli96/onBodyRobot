@@ -37,15 +37,15 @@ Code.buildToolbox = function() {
 	// set the default toolbox if none
 	if (toolboxIds === undefined || toolboxIds === "") {
 		if (boardSelected) {
-			toolboxIds = 'LOGIC,LOOPS,MATH,TEXT,LIST,COLOUR,VARIABLES,FUNCTIONS,BOARD';
+			toolboxIds = 'LOGIC,LOOPS,MOTOR,TEXT,LIST,COLOUR,VARIABLES,FUNCTIONS,BOARD';
 			window.localStorage.defaultToolbox = 1;
 		}
 		else {
-			toolboxIds = 'LOGIC,LOOPS,MATH,TEXT,LIST,COLOUR,VARIABLES,FUNCTIONS';
+			toolboxIds = 'LOGIC,LOOPS,MOTOR,TEXT,LIST,COLOUR,VARIABLES,FUNCTIONS';
 			window.localStorage.defaultToolbox = 0;
 		}
 	} else {
-		toolboxIds += ',LOGIC,LOOPS,MATH,TEXT,LIST,COLOUR,VARIABLES,FUNCTIONS,BOARD';
+		toolboxIds += ',LOGIC,LOOPS,MOTOR,TEXT,LIST,COLOUR,VARIABLES,FUNCTIONS,BOARD';
 			window.localStorage.defaultToolbox = 2;
 	}
 	//save config in local browser storage for rendering in menu categories list
