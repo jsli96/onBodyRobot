@@ -75,7 +75,7 @@ var toolbox_standard = {
 			"levels": "1,2,3",
             "categorystyle": "math_category",
             "cssConfig": {
-              "icon": "customIcon fa fa-calculator"
+              "icon": "customIcon fa fa-cogs"
             },
             "contents": [
               {
