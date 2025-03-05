@@ -2,8 +2,6 @@
 #include <ESPAsyncWebServer.h>
 #include <Adafruit_NeoPixel.h>
 
-#include "SPIFFS.h"
-
 #include <TFT_eSPI.h>
 #include <Wire.h>
 #include <SPI.h>
@@ -272,13 +270,6 @@ void setup() {
   Serial.println(WiFi.localIP());
   ipAddr = WiFi.localIP().toString();
 
-  // Initialize SPIFFS
-  if (!SPIFFS.begin(true)) {
-    Serial.println("An error occurred while mounting SPIFFS");
-    return;
-  }
-
-
   #ifdef USE_SPI
     SPI_PORT.begin();
     myICM.begin(CS_PIN, SPI_PORT);
@@ -312,12 +303,6 @@ void setup() {
   setupMotorControl();
 
   // Define web routes before starting the server
-  // HTML/CSS layout of the webpage
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send(SPIFFS, "/index.html", "text/html");
-  });
-
-
   // Movement
   server.on("/move/stop", HTTP_GET, [](AsyncWebServerRequest *request){
     Serial.println("Stop");
