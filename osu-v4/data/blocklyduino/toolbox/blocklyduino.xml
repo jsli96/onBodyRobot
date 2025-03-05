@@ -9,6 +9,9 @@
         <block type="logic_null"></block>
         <block type="logic_ternary"></block>
     </category>
+    <category name="Motor" categorystyle="math_category">
+        <block type="motor_control"></block>
+    </category>
     <category name="%{BKY_CATLOOPS}" categorystyle="loop_category">
         <block type="controls_repeat_ext">
             <value name="TIMES">

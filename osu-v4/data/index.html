@@ -552,6 +552,11 @@
                 </div>
             </div>
         </div>
+        <div id="motorControls">
+            <button id="forwardButton">Forward</button>
+            <button id="backwardButton">Backward</button>
+            <button id="stopButton">Stop</button>
+          </div>
     </body>
     <!-- Blockly libraries -->
     <script src="./@blockly/blockly_compressed.js"></script>
@@ -579,6 +584,7 @@
     <script src="./blocklyduino/toolbox/toolbox_servo.json"></script>
     <script src="./blocklyduino/toolbox/toolbox_standard.json"></script>
     <!-- Blockly libraries of function, hacked from different demos -->
+    <script src="./js/motorControl.js"></script>
     <script src="./js/blockly/keyboard_nav.js"></script>
     <script src="./js/blockly/playground.js"></script>
     <script src="./js/init.js"></script>
@@ -643,7 +649,7 @@
             }
         };
     
-        Blockly.JavaScript['motor_control'] = function(block) {
+        Blockly.Arduino['motor_control'] = function(block) {
             var direction = block.getFieldValue('DIRECTION');
             var code = "";
             if (direction === "F") {
@@ -655,6 +661,7 @@
             }
             return code;
         };
+
     </script>
     
     <script>
