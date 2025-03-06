@@ -557,6 +557,36 @@
             <button id="backwardButton">Backward</button>
             <button id="stopButton">Stop</button>
           </div>
+    <button id="executeButton" style="
+          padding: 10px 20px;
+          background-color: #4CAF50;
+          color: white;
+          border: none;
+          border-radius: 5px;
+          font-size: 16px;
+          cursor: pointer;">
+      Execute
+    </button>
+    
+    <script>
+        function updateExecButtonPosition() {
+          var trash = document.querySelector('.blocklyTrash');
+          var execButton = document.getElementById('executeButton');
+          
+          if (trash && execButton) {
+            var rect = trash.getBoundingClientRect();
+            execButton.style.position = 'absolute';
+            execButton.style.top = (rect.top + 50) + 'px';
+            execButton.style.left = (rect.left - execButton.offsetWidth - 10) + 'px';
+          }
+        }
+      
+        window.addEventListener('load', function() {
+          setTimeout(updateExecButtonPosition, 0);
+          setInterval(updateExecButtonPosition, 0);
+        });
+      </script>
+      
     </body>
     <!-- Blockly libraries -->
     <script src="./@blockly/blockly_compressed.js"></script>
