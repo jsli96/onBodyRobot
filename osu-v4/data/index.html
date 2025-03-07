@@ -588,25 +588,66 @@
       </script>
 
     <script>
-        function getLoopCommands() {
-            // Get the full generated code as a string.
-            var code = editor.getValue(); 
+        function unrollForLoops(code) {
+        var lines = code.split('\n');
+        var expanded = [];
+        var i = 0;
+        
+        while (i < lines.length) {
+            var line = lines[i].trim();
+            if (line.startsWith("for(") || line.startsWith("for (")) {
+            // Extract iteration count, e.g., count < 3
+            var iterationMatch = line.match(/count\s*<\s*(\d+)/);
+            var iterations = iterationMatch ? parseInt(iterationMatch[1]) : 0;
             
-            // Use a regular expression to capture everything between "void loop() {" and the matching "}"
-            var loopRegex = /void\s+loop\s*\(\s*\)\s*{([\s\S]*?)^}/m;
-            var match = code.match(loopRegex);
-            
-            if (match && match[1]) {
-                var loopBody = match[1];
-                // Split the loop body into lines, trim them, and filter out empty lines.
-                var lines = loopBody.split('\n')
-                .map(line => line.trim())
-                .filter(line => line !== "");
-                return lines;
-            } else {
-                console.error("Could not extract loop() content");
-                return [];
+            // Move forward until you find the line with "{"
+            while (i < lines.length && lines[i].indexOf("{") === -1) {
+                i++;
             }
+            // Now capture loop body lines until matching "}" is found
+            i++; // skip the line with "{"
+            var loopBlock = [];
+            while (i < lines.length && lines[i].indexOf("}") === -1) {
+                var bodyLine = lines[i].trim();
+                if (bodyLine !== "") {
+                loopBlock.push(bodyLine);
+                }
+                i++;
+            }
+            console.log("Found loop block with", iterations, "iterations:", loopBlock);
+            // Unroll the loop block
+            for (var j = 0; j < iterations; j++) {
+                expanded = expanded.concat(loopBlock);
+            }
+            i++; // Skip the "}" line.
+            } else {
+            expanded.push(line);
+            i++;
+            }
+        }
+        return expanded;
+        }
+
+
+        function getLoopCommands() {
+        // Get the full generated code as a string.
+        var code = editor.getValue(); // or document.getElementById("sourcecode").innerText
+        
+        // Use a regex to capture everything inside void loop() { ... }
+        var loopRegex = /void\s+loop\s*\(\s*\)\s*{([\s\S]*?)^}/m;
+        var match = code.match(loopRegex);
+        
+        if (match && match[1]) {
+            var loopBody = match[1];
+            // First, split into lines and filter out empty ones
+            var lines = loopBody.split('\n').map(line => line.trim()).filter(line => line !== "");
+            // Then unroll any for loops found
+            var expandedCommands = unrollForLoops(lines.join('\n'));
+            return expandedCommands;
+        } else {
+            console.error("Could not extract loop() content");
+            return [];
+        }
         }
 
         function executeSequence() {
@@ -619,7 +660,7 @@
             commands.forEach(function(line) {
                 console.log("Processing command line:", line);  // Print each command line
                 // Map each line to a corresponding endpoint.
-                var route = "";
+                let command = "";  // Use let so that each iteration has its own copy
                 if (line === "moveForward();") {
                     command = "moveForward";
                 } else if (line === "moveBackward();") {

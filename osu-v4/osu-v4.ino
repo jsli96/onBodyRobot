@@ -266,8 +266,6 @@ void setup() {
 //        Motor Control Program
 // -----------------------------------------------------
 
-String command = ""; 
-
 void setupMotorControl() {
     // Ensure I2C is initialized once in the main setup()
     if (!mcp.begin_I2C(0x20)) {  // Initialize MCP23017 at address 0x20
@@ -356,8 +354,8 @@ void loop() {
     }
   }
 
-    // Check if a motor command is active and has run for 10 seconds
-    if (motorActive && (millis() - motorCommandStart >= 10000)) {
+    // Check if a motor command is active and has run for 5 seconds
+    if (motorActive && (millis() - motorCommandStart >= 5000)) {
       stopMotor();
       motorActive = false;
       Serial.println("Motor command timed out; motor stopped.");
