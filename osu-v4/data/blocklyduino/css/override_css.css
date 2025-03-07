@@ -98,3 +98,14 @@ input:checked + .slider:before {
   vertical-align: middle;
   width: 25px;
 }
+
+#iotConnectButton,
+#toolsButton,
+#iotPopup,
+#boardButton,
+#verifyButton,
+#serialButton,
+#uploadButton,
+#serialConnectButton {
+  display: none !important;
+}
