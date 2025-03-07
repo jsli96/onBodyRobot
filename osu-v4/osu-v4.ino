@@ -18,6 +18,12 @@ Adafruit_MCP23X17 mcp;
 #define SPI_PORT    SPI
 #define CS_PIN      1
 
+#include <Adafruit_NeoPixel.h>
+
+#define LED_PIN   D0    // Change to D2 if needed
+#define NUM_LEDS  1     // Number of WS2812B LEDs
+
+
 #ifdef USE_SPI
 ICM_20948_SPI myICM;
 #else
@@ -25,6 +31,9 @@ ICM_20948_I2C myICM;
 #endif
 
 PNG png;
+
+Adafruit_NeoPixel strip(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
+
 
 unsigned long motorCommandStart = 0;
 bool motorActive = false;
@@ -277,7 +286,11 @@ void setupMotorControl() {
     mcp.pinMode(14, OUTPUT);  // D3 (Motor_IN1)
     mcp.pinMode(15, OUTPUT);  // D4 (Motor_IN2)
 
+    strip.begin();         // Start the NeoPixel library
+    strip.show();          // Turn off all LEDs at startup
+
     stopMotor(); // Ensure motor is off initially
+
     Serial.println("Motor control initialized!");
 }
 
@@ -323,6 +336,19 @@ void processSerialCommand(String cmd) {
 
 
 void loop() {
+
+  strip.setPixelColor(0, strip.Color(255, 0, 0)); // Red
+    strip.show();
+    delay(1000);
+
+    strip.setPixelColor(0, strip.Color(0, 255, 0)); // Green
+    strip.show();
+    delay(1000);
+
+    strip.setPixelColor(0, strip.Color(0, 0, 255)); // Blue
+    strip.show();
+    delay(1000);
+
   bool isPressed = chsc6x_is_pressed();
   // 1) Handle swipe
   if (isPressed) {

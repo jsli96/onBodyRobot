@@ -23,19 +23,19 @@ Blockly.Arduino['colour_picker'] = function (block) {
 };
 
 Blockly.Arduino['colour_random'] = function (block) {
-    // Generate a random colour.
-    var functionName = Blockly.Arduino.provideFunction_('colourRandom',
-            ['function ' + Blockly.Arduino.FUNCTION_NAME_PLACEHOLDER_ + '() {',
-                '  String colorRand = "";',
-                '  for (int i = 0; i < 6; i++) {',
-                '    int randNum = random(0, 16);',
-                '    colorRand += String(randNum, HEX);',
-                '  }',
-                '  return (\'#\' + colorRand);',
-                '}']);
+    // Provide a function that returns the current LED color.
+    var functionName = Blockly.Arduino.provideFunction_('getCurrentLEDColor', [
+      'String ' + Blockly.Arduino.FUNCTION_NAME_PLACEHOLDER_ + '() {',
+      '  char buf[8];',
+      '  // Format rrr, ggg, and bbb as a hexadecimal string, e.g., "#RRGGBB"',
+      '  sprintf(buf, "#%02X%02X%02X", rrr, ggg, bbb);',
+      '  return String(buf);',
+      '}'
+    ]);
     var code = functionName + '()';
     return [code, Blockly.Arduino.ORDER_FUNCTION_CALL];
-};
+  };
+  
 
 Blockly.Arduino['colour_rgb'] = function (block) {
     // Compose a colour from RGB components expressed as percentages.

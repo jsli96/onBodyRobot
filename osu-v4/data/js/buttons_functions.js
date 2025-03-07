@@ -68,15 +68,22 @@ function fullScreen(_element) {
 ;
 
 function exitFullScreen() {
-    if (fullScreen_ === false) {
-        fullScreenButton.className = 'iconButtonsClicked';
-        fullScreen_ = true;
-    } else {
-        fullScreenButton.className = 'iconButtons';
-        fullScreen_ = false;
-    }
-}
-;
+  // Check if no element is in full screen mode (standard + vendor prefixes)
+  if (!document.fullscreenElement && 
+      !document.webkitFullscreenElement && 
+      !document.msFullscreenElement) {
+    // Full screen has been exited:
+    fullScreenButton.className = 'iconButtons';
+    fullScreen_ = false;
+    // Reload the page
+    location.reload();
+  } else {
+    // If still in full screen, update button state (if needed)
+    fullScreenButton.className = 'iconButtonsClicked';
+    fullScreen_ = true;
+  }
+};
+
 
 /**
  * Copy code from div code_peek in clipboard system

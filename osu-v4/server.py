@@ -13,7 +13,7 @@ app = Flask(__name__)
 # Open a serial connection to the robot.
 try:
     # Replace with your actual serial port, e.g., '/dev/tty.usbmodem1101'
-    ser = serial.Serial(port='/dev/cu.usbmodem1101', baudrate=115200, timeout=1)
+    ser = serial.Serial(port='/dev/cu.usbmodem101', baudrate=115200, timeout=1)
     time.sleep(2)  # Allow time for the connection to establish
     print("Serial connection established on", ser.port)
 except Exception as e:
