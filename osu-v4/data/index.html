@@ -557,7 +557,7 @@
             <button id="backwardButton">Backward</button>
             <button id="stopButton">Stop</button>
           </div>
-    <button id="executeButton" style="
+    <button id="executeButton" class="executeButton" onclick="executeSequence()" style="
           padding: 10px 20px;
           background-color: #4CAF50;
           color: white;
@@ -586,6 +586,64 @@
           setInterval(updateExecButtonPosition, 0);
         });
       </script>
+
+    <script>
+        function getLoopCommands() {
+            // Get the full generated code as a string.
+            var code = editor.getValue(); 
+            
+            // Use a regular expression to capture everything between "void loop() {" and the matching "}"
+            var loopRegex = /void\s+loop\s*\(\s*\)\s*{([\s\S]*?)^}/m;
+            var match = code.match(loopRegex);
+            
+            if (match && match[1]) {
+                var loopBody = match[1];
+                // Split the loop body into lines, trim them, and filter out empty lines.
+                var lines = loopBody.split('\n')
+                .map(line => line.trim())
+                .filter(line => line !== "");
+                return lines;
+            } else {
+                console.error("Could not extract loop() content");
+                return [];
+            }
+        }
+
+        function executeSequence() {
+            var commands = getLoopCommands();
+            console.log("Extracted commands:", commands);  // Print the full array of commands
+            
+            var totalDelay = 0;
+            var defaultDelay = 5000; // Adjust this delay if needed
+            
+            commands.forEach(function(line) {
+                console.log("Processing command line:", line);  // Print each command line
+                // Map each line to a corresponding endpoint.
+                var route = "";
+                if (line === "moveForward();") {
+                    command = "moveForward";
+                } else if (line === "moveBackward();") {
+                    command = "moveBackward";
+                } else if (line === "stopMotor();") {
+                    command = "stopMotor";
+                } else {
+                    console.warn("Unrecognized command:", line);
+                return;
+                }
+                
+                setTimeout(function() {
+                    fetch("/execute/" + command)
+                    .then(response => response.json())
+                    .then(data => console.log("Executed command:", data))
+                    .catch(err => console.error("Error executing command", command, err));
+                }, totalDelay);
+                
+                // Increase the total delay.
+                totalDelay += defaultDelay;
+            });
+        }
+    </script>
+  
       
     </body>
     <!-- Blockly libraries -->

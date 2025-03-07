@@ -1,7 +1,3 @@
-#include <WiFi.h>
-#include <ESPAsyncWebServer.h>
-#include <Adafruit_NeoPixel.h>
-
 #include <TFT_eSPI.h>
 #include <Wire.h>
 #include <SPI.h>
@@ -30,6 +26,8 @@ ICM_20948_I2C myICM;
 
 PNG png;
 
+String incomingCommand = "";
+
 // For reading touch
 bool lastPressed = false;
 lv_coord_t startX = 0, startY = 0;
@@ -55,24 +53,13 @@ typedef struct {
 
 const char* calico_version = "osu-v4";  // Make sure this matches file name
 
-// Network credentials
-const char* ssid_dev = "TP-LINK_lab0102";
-const char* password_dev = "LAB0102!!!";
-// Change to your own WiFi 
-const char* ssid = "atp236";
-const char* password = "88888888";
-
 // Pixel setup
 // #define LEDS_COUNT 4
 // #define LEDS_PIN 6
 // Adafruit_NeoPixel on_board_led(1, 21, NEO_RGB);
 // Adafruit_NeoPixel strip_led(LEDS_COUNT, LEDS_PIN, NEO_GRB);  // Note R/G are reversed compared to onboard LED
 
-AsyncWebServer server(80);
-String ipAddr;
-
 // Calico setup
-
 
 #define MOTOR_IN1 14  // MCP23017 Pin D3
 #define MOTOR_IN2 15  // MCP23017 Pin D4
@@ -239,37 +226,6 @@ void setup() {
   Serial.print("Setup task running on core ");
   Serial.println(xPortGetCoreID());
 
-  // Connect to Wi-Fi show network with SSID and password
-  Serial.print("Connecting to show network:");
-  Serial.println(ssid);
-  WiFi.begin(ssid, password);
-  int tries = 0;
-  //setColor(0x020000);
-  while (WiFi.status() != WL_CONNECTED && tries < 6) {
-    vTaskDelay(500 / portTICK_PERIOD_MS);  // Use non-blocking delay
-    tries++;
-    Serial.print(".");
-  }
-
-  // Dev network
-  if (WiFi.status() != WL_CONNECTED) {
-    //setColor(0x000200);
-    WiFi.disconnect();
-    Serial.print("\nConnecting to dev network: ");
-    Serial.println(ssid_dev);
-    WiFi.begin(ssid_dev, password_dev);
-    while (WiFi.status() != WL_CONNECTED) {
-      vTaskDelay(500 / portTICK_PERIOD_MS);  // Use non-blocking delay
-      Serial.print(".");
-    }
-  }
-
-  // Print local IP address and start web server
-  Serial.println("");
-  Serial.print("WiFi connected. IP address: ");
-  Serial.println(WiFi.localIP());
-  ipAddr = WiFi.localIP().toString();
-
   #ifdef USE_SPI
     SPI_PORT.begin();
     myICM.begin(CS_PIN, SPI_PORT);
@@ -298,73 +254,8 @@ void setup() {
 
   // --------------------------------------------------
   // Call the Motor Control setup next
-  // (Renamed setupMotorControl())
   // --------------------------------------------------
   setupMotorControl();
-
-  // Define web routes before starting the server
-  // Movement
-  server.on("/move/stop", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println("Stop");
-    moveStatus = "stop";
-    stopMotor();
-    request->send(200, "text/plain", "Stop movement");
-  });
-
-  server.on("/move/forward", HTTP_GET, [](AsyncWebServerRequest *request){
-    moveForward();
-    Serial.println("Forward");
-    
-    request->send(200, "text/plain", "Move forward");
-  });
-
-  server.on("/move/backward", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println("Backward");
-    moveBackward();
-    request->send(200, "text/plain", "Move backward");
-  });
-
-  // Vibe
-  server.on("/v1", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println("Vibe 1");
-    moveStatus = "V1";
-    for (int i = 0; i < 5; i++) {
-      moveForward();
-      vTaskDelay(100 / portTICK_PERIOD_MS);  // Replaced delay(100)
-      moveBackward();
-      vTaskDelay(100 / portTICK_PERIOD_MS);  // Replaced delay(100)
-    }
-    stopMotor();
-    request->send(200, "text/plain", "Vibe 1 executed");
-  });
-
-  server.on("/v2", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println("Vibe 2");
-    moveStatus = "V2";
-    for (int i = 0; i < 10; i++) {
-      moveForward();
-      vTaskDelay(200 / portTICK_PERIOD_MS);  // Replaced delay(100)
-      moveBackward();
-      vTaskDelay(200 / portTICK_PERIOD_MS);  // Replaced delay(100)
-    }
-    stopMotor();
-    request->send(200, "text/plain", "Vibe 2 executed");
-  });
-
-  server.on("/setDuration", HTTP_GET, [](AsyncWebServerRequest *request) {
-      if (request->hasParam("value")) {
-          String value = request->getParam("value")->value();
-          br = value.toInt();  // Convert string to integer
-          Serial.print("Updated duration: ");
-          Serial.println(br);
-          request->send(200, "text/plain", "Duration updated");
-      } else {
-          request->send(400, "text/plain", "Missing value");
-      }
-  });
-
-  server.begin();
-  Serial.println("called server.begin()");
 
 }
 
@@ -405,6 +296,25 @@ void stopMotor() {
     mcp.digitalWrite(MOTOR_IN2, LOW);
 }
 
+// This function interprets commands received over Serial.
+void processSerialCommand(String cmd) {
+  cmd.trim();  // Remove any extra whitespace/newline characters
+
+  if (cmd == "moveForward") {
+    moveForward();
+    Serial.println("Executed moveForward()");
+  } else if (cmd == "moveBackward") {
+    moveBackward();
+    Serial.println("Executed moveBackward()");
+  } else if (cmd == "stopMotor") {
+    stopMotor();
+    Serial.println("Executed stopMotor()");
+  } else {
+    Serial.print("Unrecognized command: ");
+    Serial.println(cmd);
+  }
+}
+
 void loop() {
   bool isPressed = chsc6x_is_pressed();
   // 1) Handle swipe
@@ -437,6 +347,17 @@ void loop() {
     }
   }
 
-  // 3) Slight delay
+  // Check if there is a new serial command
+  while (Serial.available() > 0) {
+    char c = Serial.read();
+    if (c == '\n') {
+      // End of command
+      processSerialCommand(incomingCommand);
+      incomingCommand = "";
+    } else {
+      incomingCommand += c;
+    }
+  }
+
   delay(20);
 }
