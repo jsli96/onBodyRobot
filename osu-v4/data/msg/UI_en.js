@@ -5,7 +5,7 @@
  */
 
 var MSG = {
-    title: "Calico",
+    title: "Calico Control",
     appName: "Calico",
     blocks: "Blocks",
     prog: "Program",

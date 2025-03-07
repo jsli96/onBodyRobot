@@ -337,10 +337,11 @@ td.tabMiddle {
 .content_wrapper {
     height: 100%;
     width: 100%;
-    background-color: #eee;
+    background-color: #006468;
     display: flex;
     flex-wrap: wrap;
 }
+
 .wrapper_up {
     width: 100%;
     /* Firefox */

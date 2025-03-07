@@ -101,6 +101,12 @@ input:checked + .slider:before {
 
 #iotConnectButton,
 #toolsButton,
+#checkDetails,
+#infoBoardPort,
+#content_serial,
+#boardSelected_span,
+#portSelected_span,
+#barre_h,
 #iotPopup,
 #boardButton,
 #verifyButton,
@@ -109,3 +115,4 @@ input:checked + .slider:before {
 #serialConnectButton {
   display: none !important;
 }
+
