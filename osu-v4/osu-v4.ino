@@ -26,6 +26,9 @@ ICM_20948_I2C myICM;
 
 PNG png;
 
+unsigned long motorCommandStart = 0;
+bool motorActive = false;
+
 String incomingCommand = "";
 
 // For reading touch
@@ -298,22 +301,28 @@ void stopMotor() {
 
 // This function interprets commands received over Serial.
 void processSerialCommand(String cmd) {
-  cmd.trim();  // Remove any extra whitespace/newline characters
+  cmd.trim();  // Remove extra whitespace/newlines
 
   if (cmd == "moveForward") {
     moveForward();
     Serial.println("Executed moveForward()");
+    motorCommandStart = millis();  // Record the start time
+    motorActive = true;
   } else if (cmd == "moveBackward") {
     moveBackward();
     Serial.println("Executed moveBackward()");
+    motorCommandStart = millis();  // Record the start time
+    motorActive = true;
   } else if (cmd == "stopMotor") {
     stopMotor();
     Serial.println("Executed stopMotor()");
+    motorActive = false;
   } else {
     Serial.print("Unrecognized command: ");
     Serial.println(cmd);
   }
 }
+
 
 void loop() {
   bool isPressed = chsc6x_is_pressed();
@@ -346,6 +355,14 @@ void loop() {
       lastRotationUpdate = currentTime;
     }
   }
+
+    // Check if a motor command is active and has run for 10 seconds
+    if (motorActive && (millis() - motorCommandStart >= 10000)) {
+      stopMotor();
+      motorActive = false;
+      Serial.println("Motor command timed out; motor stopped.");
+    }
+    
 
   // Check if there is a new serial command
   while (Serial.available() > 0) {
