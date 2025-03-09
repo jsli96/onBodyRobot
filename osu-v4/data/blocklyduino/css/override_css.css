@@ -116,3 +116,15 @@ input:checked + .slider:before {
   display: none !important;
 }
 
+#CLI_content, 
+#CLI_title, 
+#configCLI, 
+#CLI_title_span,
+.iconButtons.CLI, 
+.UIText.CLI,
+.accordion_cli,
+.accordion_iot,
+#iot_title_span,
+#arrowhead_controls  {
+  display: none !important;
+}

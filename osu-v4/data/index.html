@@ -377,7 +377,7 @@
                     </select>
                     <br>
                 </div>
-                <button class="accordion">
+                <button class="accordion_cli">
                     <span id="CLI_title_span" aria-expanded="false" aria-controls="accordion_CLI_content"></span>
                 </button>
                 <div id="CLI_content" class="side_content config_content CLI panel">
@@ -445,7 +445,7 @@
                 </button>
                 <div id="categories_content" class="side_content config_content panel UIText">
                 </div>
-                <button class="accordion">
+                <button class="accordion_iot">
                     <span id="iot_title_span" aria-expanded="false" aria-controls="accordion_categories_content"></span>
                 </button>
                 <div id="arrowhead_controls" class="side_content config_content panel UIText">
@@ -683,6 +683,15 @@
                 totalDelay += defaultDelay;
             });
         }
+    </script>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        let cliAccordion = document.querySelector("button.accordion[aria-controls='accordion_CLI_content']");
+        if (cliAccordion) {
+            cliAccordion.style.display = "none";
+        }
+    });
     </script>
   
       
