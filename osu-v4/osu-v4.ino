@@ -20,7 +20,7 @@ Adafruit_MCP23X17 mcp;
 
 #include <Adafruit_NeoPixel.h>
 
-#define LED_PIN   D0    // Change to D2 if needed
+#define LED_PIN   D2    // Change to D2 if needed
 #define NUM_LEDS  1     // Number of WS2812B LEDs
 
 
@@ -334,20 +334,16 @@ void processSerialCommand(String cmd) {
   }
 }
 
+void colorFill(uint32_t color, uint8_t wait) {
+  for(int i = 0; i < strip.numPixels(); i++) {
+    strip.setPixelColor(i, color);
+    strip.show();
+    delay(wait);
+  }
+}
+
 
 void loop() {
-
-  strip.setPixelColor(0, strip.Color(255, 0, 0)); // Red
-    strip.show();
-    delay(1000);
-
-    strip.setPixelColor(0, strip.Color(0, 255, 0)); // Green
-    strip.show();
-    delay(1000);
-
-    strip.setPixelColor(0, strip.Color(0, 0, 255)); // Blue
-    strip.show();
-    delay(1000);
 
   bool isPressed = chsc6x_is_pressed();
   // 1) Handle swipe
@@ -399,6 +395,13 @@ void loop() {
       incomingCommand += c;
     }
   }
+
+  // 3) Slight delay
+  delay(20);
+  colorFill(strip.Color(255, 0, 0), 50);
+  delay(500);
+  colorFill(strip.Color(0, 255, 0), 50);
+  delay(500);
 
   delay(20);
 }
