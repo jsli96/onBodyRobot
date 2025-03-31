@@ -140,6 +140,10 @@ void checkSwipe() {
     currentImageIndex--;
     if (currentImageIndex < 0) currentImageIndex = imageCount - 1;
     showImage(currentImageIndex);
+    // Immediately update display after swipe:
+    float angle = readTiltAngle();
+    drawRotated(-angle);
+    lastAngle = angle;
     SERIAL_PORT.println("Swipe Right -> Previous Image");
   }
   else if (deltaX < -SWIPE_THRESHOLD) {
@@ -147,12 +151,17 @@ void checkSwipe() {
     currentImageIndex++;
     if (currentImageIndex >= imageCount) currentImageIndex = 0;
     showImage(currentImageIndex);
+    // Immediately update display after swipe:
+    float angle = readTiltAngle();
+    drawRotated(-angle);
+    lastAngle = angle;
     SERIAL_PORT.println("Swipe Left -> Next Image");
   }
   else {
     SERIAL_PORT.println("No valid swipe detected.");
   }
 }
+
 
 //----------------------------------------------------------------------------------
 // Compute tilt angle from accelerometer
@@ -223,7 +232,7 @@ void drawRotated(float angleDeg)
 
 float lastAngle = -1;
 unsigned long lastRotationUpdate = 0;
-const int ROTATION_UPDATE_INTERVAL = 300; // ms
+const int ROTATION_UPDATE_INTERVAL = 150; // ms
 
 
 void setup() {
@@ -369,7 +378,7 @@ void loop() {
   unsigned long currentTime = millis();
   if (!isPressed && (currentTime - lastRotationUpdate > ROTATION_UPDATE_INTERVAL)) {
     float angle = readTiltAngle();
-    if (fabs(angle - lastAngle) > 10.0) {
+    if (fabs(angle - lastAngle) > 5.0) {
       drawRotated(-angle);
       lastAngle = angle;
       lastRotationUpdate = currentTime;
