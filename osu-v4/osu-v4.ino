@@ -65,11 +65,6 @@ typedef struct {
 
 const char* calico_version = "osu-v4";  // Make sure this matches file name
 
-// Pixel setup
-// #define LEDS_COUNT 4
-// #define LEDS_PIN 6
-// Adafruit_NeoPixel on_board_led(1, 21, NEO_RGB);
-// Adafruit_NeoPixel strip_led(LEDS_COUNT, LEDS_PIN, NEO_GRB);  // Note R/G are reversed compared to onboard LED
 
 // Calico setup
 
