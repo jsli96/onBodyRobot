@@ -6,6 +6,8 @@
 #include <PNGdec.h>
 #include <Adafruit_MCP23X17.h>
 
+#include <WiFi.h>
+
 Adafruit_MCP23X17 mcp;
 
 // ICM-20948
@@ -23,7 +25,6 @@ Adafruit_MCP23X17 mcp;
 #define LED_PIN   D2    // Change to D2 if needed
 #define NUM_LEDS  1     // Number of WS2812B LEDs
 
-
 #ifdef USE_SPI
 ICM_20948_SPI myICM;
 #else
@@ -34,6 +35,17 @@ PNG png;
 
 Adafruit_NeoPixel strip(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
 
+// Static IP configuration based on your iPhone hotspot settings:
+IPAddress local_IP(172, 20, 10, 10);   // Choose an available IP (example: 172.20.10.10)
+IPAddress gateway(172, 20, 10, 1);       // Likely your hotspot's IP
+IPAddress subnet(255, 255, 255, 240);    // As seen from the netmask
+IPAddress primaryDNS(8, 8, 8, 8);         // Public DNS (optional)
+IPAddress secondaryDNS(8, 8, 4, 4);       // Public DNS (optional)
+
+const char* ssid = "atp236";
+const char* password = "88888888";
+
+WiFiServer server(3333);  // Listen on port 3333
 
 unsigned long motorCommandStart = 0;
 bool motorActive = false;
@@ -66,8 +78,6 @@ typedef struct {
 const char* calico_version = "osu-v4";  // Make sure this matches file name
 
 
-// Calico setup
-
 #define MOTOR_IN1 14  // MCP23017 Pin D3
 #define MOTOR_IN2 15  // MCP23017 Pin D4
 
@@ -81,6 +91,10 @@ int rrr = 0;
 int ggg = 0;
 int bbb = 0;
 int br = 0;  //blink rate in msecs (really this is the duration of half a cycle)
+
+float lastAngle = -1;
+unsigned long lastRotationUpdate = 0;
+const int ROTATION_UPDATE_INTERVAL = 150; // ms
 
 //----------------------------------------------------------------------------------
 // PNG Callback: decode each line into rawImage[]
@@ -225,19 +239,28 @@ void drawRotated(float angleDeg)
   }
 }
 
-float lastAngle = -1;
-unsigned long lastRotationUpdate = 0;
-const int ROTATION_UPDATE_INTERVAL = 150; // ms
-
 
 void setup() {
   Serial.begin(115200);
+
+  // Set static IP configuration:
+  if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
+    Serial.println("Static IP configuration failed");
+  }
+
+  WiFi.begin(ssid, password);
   delay(500);
 
-  while (!Serial)
-    ;  // Delay until Serial port is available?
-  Serial.print("Calico is here: ");
-  Serial.println(calico_version);
+  Serial.print("Connecting to WiFi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("Connected!");
+  Serial.println(WiFi.localIP());
+
+  server.begin();
 
   Serial.print("Setup task running on core ");
   Serial.println(xPortGetCoreID());
@@ -386,26 +409,36 @@ void loop() {
       motorActive = false;
       Serial.println("Motor command timed out; motor stopped.");
     }
-    
 
-  // Check if there is a new serial command
-  while (Serial.available() > 0) {
-    char c = Serial.read();
-    if (c == '\n') {
-      // End of command
-      processSerialCommand(incomingCommand);
-      incomingCommand = "";
-    } else {
-      incomingCommand += c;
+    // 3) Check for incoming WiFi client command
+    WiFiClient client = server.available();
+    if (client) {
+      Serial.println("TCP client connected.");
+      String command = "";
+
+    while (client.connected()) {
+      while (client.available()) {
+        char c = client.read();
+        if (c == '\n') {
+          command.trim();
+          Serial.print("Received over WiFi: ");
+          Serial.println(command);
+          processSerialCommand(command);
+          command = "";
+        } else {
+          command += c;
+        }
+      }
+      delay(1);  // Small delay to avoid hogging CPU
     }
+
+    client.stop();
+    Serial.println("TCP client disconnected.");
   }
 
-  // 3) Slight delay
   delay(20);
   colorFill(strip.Color(255, 0, 0), 50);
   delay(500);
   colorFill(strip.Color(0, 255, 0), 50);
   delay(500);
-
-  delay(20);
 }
