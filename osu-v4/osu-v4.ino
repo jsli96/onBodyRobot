@@ -5,8 +5,9 @@
 #include "lv_xiao_round_screen.h"  // For CHSC6x-based touch
 #include <PNGdec.h>
 #include <Adafruit_MCP23X17.h>
-
 #include <WiFi.h>
+#include "esp_wifi.h"
+
 
 Adafruit_MCP23X17 mcp;
 
@@ -48,6 +49,7 @@ const char* password = "88888888";
 WiFiServer server(3333);  // Listen on port 3333
 
 unsigned long motorCommandStart = 0;
+unsigned long motorDuration = 0;  // Duration (in ms) for the current motor command
 bool motorActive = false;
 
 String incomingCommand = "";
@@ -77,7 +79,6 @@ typedef struct {
 
 const char* calico_version = "osu-v4";  // Make sure this matches file name
 
-
 #define MOTOR_IN1 14  // MCP23017 Pin D3
 #define MOTOR_IN2 15  // MCP23017 Pin D4
 
@@ -85,12 +86,11 @@ const char* calico_version = "osu-v4";  // Make sure this matches file name
 String moveStatus = "stop";
 
 // Global vars for lighting task
-// lighting task treats these as read-only to avoid race conditions
 String ledStatus = "off";
 int rrr = 0;
 int ggg = 0;
 int bbb = 0;
-int br = 0;  //blink rate in msecs (really this is the duration of half a cycle)
+int br = 0;  // blink rate in msecs (really this is the duration of half a cycle)
 
 float lastAngle = -1;
 unsigned long lastRotationUpdate = 0;
@@ -103,15 +103,8 @@ void PNGDrawCallback(PNGDRAW *pDraw)
 {
   if (pDraw->y >= 240) return; // safety check
 
-  // Where to place this row in rawImage
   uint16_t *dest = &rawImage[pDraw->y * imgWidth];
-
-  png.getLineAsRGB565(
-    pDraw,
-    dest,                     // store row into rawImage
-    PNG_RGB565_BIG_ENDIAN,    // might need BIG_ENDIAN if colors appear off
-    0xFFFFFFFF                // ignore alpha
-  );
+  png.getLineAsRGB565(pDraw, dest, PNG_RGB565_BIG_ENDIAN, 0xFFFFFFFF);
 }
 
 //----------------------------------------------------------------------------------
@@ -123,7 +116,6 @@ void showImage(int index) {
   if (rc == PNG_SUCCESS) {
     imgWidth  = png.getWidth();
     imgHeight = png.getHeight();
-
     rc = png.decode(nullptr, PNG_FAST_PALETTE);
     if (rc == PNG_SUCCESS) {
       SERIAL_PORT.println("Image decoded successfully.");
@@ -143,24 +135,19 @@ void showImage(int index) {
 void checkSwipe() {
   const int SWIPE_THRESHOLD = 30;
   int deltaX = lastX - startX;
-
   if (deltaX > SWIPE_THRESHOLD) {
-    // Right swipe => previous
     currentImageIndex--;
     if (currentImageIndex < 0) currentImageIndex = imageCount - 1;
     showImage(currentImageIndex);
-    // Immediately update display after swipe:
     float angle = readTiltAngle();
     drawRotated(-angle);
     lastAngle = angle;
     SERIAL_PORT.println("Swipe Right -> Previous Image");
   }
   else if (deltaX < -SWIPE_THRESHOLD) {
-    // Left swipe => next
     currentImageIndex++;
     if (currentImageIndex >= imageCount) currentImageIndex = 0;
     showImage(currentImageIndex);
-    // Immediately update display after swipe:
     float angle = readTiltAngle();
     drawRotated(-angle);
     lastAngle = angle;
@@ -171,7 +158,6 @@ void checkSwipe() {
   }
 }
 
-
 //----------------------------------------------------------------------------------
 // Compute tilt angle from accelerometer
 //----------------------------------------------------------------------------------
@@ -179,71 +165,55 @@ float readTiltAngle() {
   if (myICM.dataReady()) {
     myICM.getAGMT(); // update accelerometer
   }
-
   float ax = myICM.accX();
   float ay = myICM.accY();
   float az = myICM.accZ();
-
-  // Example: use "roll" around X axis
   float roll = atan2(ay, az) * 180.0 / PI;
-
-  // Shift into [0..360)
   float angle = roll + 180.0;
-  if (angle < 0)   angle += 360.0;
+  if (angle < 0) angle += 360.0;
   if (angle >= 360.0) angle -= 360.0;
-
   return angle;
 }
 
 //----------------------------------------------------------------------------------
 // drawRotated(angle):
-//   Takes the data in rawImage[] (16-bit, up to 240x240),
-//   rotates it by 'angle' degrees around the center,
-//   then draws to the screen.
+//   Modified to yield after each row to avoid blocking for too long.
 //----------------------------------------------------------------------------------
 void drawRotated(float angleDeg)
 {
   float angleRad = angleDeg * (PI / 180.0);
   float cosA = cos(angleRad);
   float sinA = sin(angleRad);
-
   float cx = imgWidth  * 0.5;
   float cy = imgHeight * 0.5;
-
   float screenCx = 120.0;
   float screenCy = 120.0;
-
   static uint16_t lineBuf2[240];
 
-  for (int yS = 0; yS < 240; yS++)
-  {
-    for (int xS = 0; xS < 240; xS++)
-    {
+  for (int yS = 0; yS < 240; yS++) {
+    for (int xS = 0; xS < 240; xS++) {
       float dx = xS - screenCx;
       float dy = yS - screenCy;
-
       float xSrcF =  cosA * dx + sinA * dy + cx;
       float ySrcF = -sinA * dx + cosA * dy + cy;
-
       int xSrc = (int)(xSrcF + 0.5f);
       int ySrc = (int)(ySrcF + 0.5f);
-
       if (xSrc < 0 || xSrc >= imgWidth || ySrc < 0 || ySrc >= imgHeight) {
         lineBuf2[xS] = 0x0000; // black
-      }
-      else {
+      } else {
         lineBuf2[xS] = rawImage[ySrc * imgWidth + xSrc];
       }
     }
     tft.pushImage(0, yS, 240, 1, lineBuf2);
+    // Yield after drawing each row so background tasks can run.
+    yield();
   }
 }
 
-
 void setup() {
   Serial.begin(115200);
+  Serial.println("Setup starting...");
 
-  // Set static IP configuration:
   if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
     Serial.println("Static IP configuration failed");
   }
@@ -255,10 +225,13 @@ void setup() {
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
+    yield();  // Yield during WiFi connection loop
   }
-
   Serial.println("Connected!");
   Serial.println(WiFi.localIP());
+
+  // Disable WiFi power saving (light sleep)
+  esp_wifi_set_ps(WIFI_PS_NONE);
 
   server.begin();
 
@@ -280,47 +253,28 @@ void setup() {
     SERIAL_PORT.println("ICM init OK!");
   }
 
-  // TFT init
   tft.init();
   tft.setRotation(0);
   tft.fillScreen(TFT_BLACK);
 
-  // Touch init
   pinMode(TOUCH_INT, INPUT_PULLUP);
 
-  // Show first image
   showImage(currentImageIndex);
-
-  // --------------------------------------------------
-  // Call the Motor Control setup next
-  // --------------------------------------------------
   setupMotorControl();
-
 }
-
-// -----------------------------------------------------
-//        Motor Control Program
-// -----------------------------------------------------
 
 void setupMotorControl() {
-    // Ensure I2C is initialized once in the main setup()
     if (!mcp.begin_I2C(0x20)) {  // Initialize MCP23017 at address 0x20
         Serial.println("Failed to initialize MCP23017!");
-        while (1);  // Stop execution if MCP23017 is not found
+        while (1) { yield(); }  // Prevent blocking indefinitely
     }
-
-    // Set motor control pins as OUTPUT on GPIO Expander
     mcp.pinMode(14, OUTPUT);  // D3 (Motor_IN1)
     mcp.pinMode(15, OUTPUT);  // D4 (Motor_IN2)
-
-    strip.begin();         // Start the NeoPixel library
-    strip.show();          // Turn off all LEDs at startup
-
+    strip.begin();
+    strip.show();
     stopMotor(); // Ensure motor is off initially
-
     Serial.println("Motor control initialized!");
 }
-
 
 void moveForward() {
     mcp.digitalWrite(MOTOR_IN1, HIGH);
@@ -337,19 +291,66 @@ void stopMotor() {
     mcp.digitalWrite(MOTOR_IN2, LOW);
 }
 
-// This function interprets commands received over Serial.
-void processSerialCommand(String cmd) {
-  cmd.trim();  // Remove extra whitespace/newlines
+String getCurrentLEDColor() {
+  char buf[8];
+  sprintf(buf, "#%02X%02X%02X", rrr, ggg, bbb);  // Assuming rrr/ggg/bbb are your current RGB values
+  return String(buf);
+}
 
-  if (cmd == "moveForward") {
+
+void processSerialCommand(String cmd) {
+  cmd.trim();
+  // Reset previous motor command immediately.
+  motorActive = false;
+
+  if (cmd.startsWith("CHECK_COLOR:")) {
+    String expected = cmd.substring(String("CHECK_COLOR:").length());
+    String current = getCurrentLEDColor();  // You’ll define this below
+    if (expected.equalsIgnoreCase(current)) {
+      Serial.println("LED color matches: " + expected);
+    } else {
+      Serial.println("LED color mismatch. Expected: " + expected + ", Found: " + current);
+    }
+    return;
+  }
+  
+  if (cmd.startsWith("moveForward(")) {
+    int startIdx = cmd.indexOf('(');
+    int endIdx = cmd.indexOf(')');
+    String durationStr = cmd.substring(startIdx + 1, endIdx);
+    motorDuration = durationStr.toInt(); // Duration in ms
     moveForward();
-    Serial.println("Executed moveForward()");
-    motorCommandStart = millis();  // Record the start time
+    Serial.print("Executed moveForward for ");
+    Serial.print(motorDuration);
+    Serial.println(" ms");
+    motorCommandStart = millis();
+    motorActive = true;
+  } else if (cmd.startsWith("moveBackward(")) {
+    int startIdx = cmd.indexOf('(');
+    int endIdx = cmd.indexOf(')');
+    String durationStr = cmd.substring(startIdx + 1, endIdx);
+    motorDuration = durationStr.toInt();
+    moveBackward();
+    Serial.print("Executed moveBackward for ");
+    Serial.print(motorDuration);
+    Serial.println(" ms");
+    motorCommandStart = millis();
+    motorActive = true;
+  } else if (cmd == "moveForward") {
+    motorDuration = 5000;
+    moveForward();
+    Serial.print("Executed moveForward for default duration ");
+    Serial.print(motorDuration);
+    Serial.println(" ms");
+    motorCommandStart = millis();
     motorActive = true;
   } else if (cmd == "moveBackward") {
+    motorDuration = 5000;
     moveBackward();
-    Serial.println("Executed moveBackward()");
-    motorCommandStart = millis();  // Record the start time
+    Serial.print("Executed moveBackward for default duration ");
+    Serial.print(motorDuration);
+    Serial.println(" ms");
+    motorCommandStart = millis();
     motorActive = true;
   } else if (cmd == "stopMotor") {
     stopMotor();
@@ -361,38 +362,61 @@ void processSerialCommand(String cmd) {
   }
 }
 
-void colorFill(uint32_t color, uint8_t wait) {
-  for(int i = 0; i < strip.numPixels(); i++) {
-    strip.setPixelColor(i, color);
+// Global variables for non-blocking LED fill
+bool ledFilling = false;
+uint32_t targetLEDColor = 0;
+uint8_t ledWaitTime = 50; // time per LED update in ms
+int currentLED = 0;
+unsigned long lastLedUpdate = 0;
+
+void startColorFill(uint32_t color, uint8_t wait) {
+  targetLEDColor = color;
+  ledWaitTime = wait;
+  currentLED = 0;
+  ledFilling = true;
+  lastLedUpdate = millis();
+
+  // ✅ Set global RGB values
+  rrr = (color >> 16) & 0xFF;
+  ggg = (color >> 8) & 0xFF;
+  bbb = color & 0xFF;
+  
+  for (int i = 0; i < strip.numPixels(); i++) {
+    strip.setPixelColor(i, 0);
+  }
+  strip.show();
+}
+
+void updateColorFill() {
+  if (ledFilling && (millis() - lastLedUpdate >= ledWaitTime)) {
+    strip.setPixelColor(currentLED, targetLEDColor);
     strip.show();
-    delay(wait);
+    currentLED++;
+    lastLedUpdate = millis();
+    if (currentLED >= strip.numPixels()) {
+      ledFilling = false;
+    }
   }
 }
 
-
 void loop() {
-
   bool isPressed = chsc6x_is_pressed();
-  // 1) Handle swipe
   if (isPressed) {
     lv_coord_t x, y;
     chsc6x_get_xy(&x, &y);
-
     if (!lastPressed) {
       startX = x;
       startY = y;
     }
     lastX = x;
     lastY = y;
-  } 
-  else {
+  } else {
     if (lastPressed) {
       checkSwipe();
     }
   }
   lastPressed = isPressed;
 
-  // 2) Update Rotation if enough time has passed
   unsigned long currentTime = millis();
   if (!isPressed && (currentTime - lastRotationUpdate > ROTATION_UPDATE_INTERVAL)) {
     float angle = readTiltAngle();
@@ -403,19 +427,17 @@ void loop() {
     }
   }
 
-    // Check if a motor command is active and has run for 5 seconds
-    if (motorActive && (millis() - motorCommandStart >= 5000)) {
-      stopMotor();
-      motorActive = false;
-      Serial.println("Motor command timed out; motor stopped.");
-    }
+  if (motorActive && (millis() - motorCommandStart >= motorDuration)) {
+    stopMotor();
+    motorActive = false;
+    Serial.println("Motor command duration elapsed; motor stopped.");
+  }
 
-    // 3) Check for incoming WiFi client command
-    WiFiClient client = server.available();
-    if (client) {
-      Serial.println("TCP client connected.");
-      String command = "";
-
+  // Handle incoming WiFi client commands (non-blocking):
+  WiFiClient client = server.available();
+  if (client) {
+    Serial.println("TCP client connected.");
+    String command = "";
     while (client.connected()) {
       while (client.available()) {
         char c = client.read();
@@ -429,16 +451,23 @@ void loop() {
           command += c;
         }
       }
-      delay(1);  // Small delay to avoid hogging CPU
+      yield();  // Yield instead of delay(1) to allow background tasks to run.
     }
-
     client.stop();
     Serial.println("TCP client disconnected.");
   }
 
-  delay(20);
-  colorFill(strip.Color(255, 0, 0), 50);
-  delay(500);
-  colorFill(strip.Color(0, 255, 0), 50);
-  delay(500);
+  updateColorFill();
+
+  static unsigned long lastFillChange = 0;
+  if (millis() - lastFillChange > 500) {
+    static bool toggle = false;
+    if (toggle) {
+      startColorFill(strip.Color(255, 0, 0), 50);
+    } else {
+      startColorFill(strip.Color(0, 255, 0), 50);
+    }
+    toggle = !toggle;
+    lastFillChange = millis();
+  }
 }

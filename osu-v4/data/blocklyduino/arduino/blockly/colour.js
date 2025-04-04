@@ -15,6 +15,16 @@ goog.provide('Blockly.Arduino.colour');
 
 goog.require('Blockly.Arduino');
 
+Blockly.Blocks['colour_random'] = {
+  init: function () {
+    this.appendDummyInput()
+        .appendField(Blockly.Msg["COLOUR_RANDOM_TITLE"]);
+    this.setOutput(true, "String");  // This tells Blockly it's a string-returning value block
+    this.setColour(160);             // Optional: you can customize the color
+    this.setTooltip(Blockly.Msg["COLOUR_RANDOM_TOOLTIP"]);
+    this.setHelpUrl("");
+  }
+};
 
 Blockly.Arduino['colour_picker'] = function (block) {
     // Colour picker.
@@ -22,20 +32,44 @@ Blockly.Arduino['colour_picker'] = function (block) {
     return [code, Blockly.Arduino.ORDER_ATOMIC];
 };
 
+Blockly.Blocks['colour_picker'] = {
+  init: function () {
+    this.appendDummyInput()
+        .appendField(new Blockly.FieldColour("#ff0000"), "COLOUR");
+    this.setOutput(true, "String");  // ✅ ← add this so it plugs into string sockets
+    this.setColour(160);
+    this.setTooltip("Pick a color");
+    this.setHelpUrl("");
+  }
+};
+
+
 Blockly.Arduino['colour_random'] = function (block) {
-    // Provide a function that returns the current LED color.
-    var functionName = Blockly.Arduino.provideFunction_('getCurrentLEDColor', [
+  // Ensure order is defined!
+  if (typeof Blockly.Arduino.ORDER_FUNCTION_CALL === 'undefined') {
+    Blockly.Arduino.ORDER_FUNCTION_CALL = 2;
+  }
+
+  var functionName = Blockly.Arduino.provideFunction_(
+    'getCurrentLEDColor',
+    [
       'String ' + Blockly.Arduino.FUNCTION_NAME_PLACEHOLDER_ + '() {',
       '  char buf[8];',
-      '  // Format rrr, ggg, and bbb as a hexadecimal string, e.g., "#RRGGBB"',
       '  sprintf(buf, "#%02X%02X%02X", rrr, ggg, bbb);',
       '  return String(buf);',
       '}'
-    ]);
-    var code = functionName + '()';
-    return [code, Blockly.Arduino.ORDER_FUNCTION_CALL];
-  };
-  
+    ]
+  );
+
+  var code = functionName + '()';
+  var returnValue = [code, Blockly.Arduino.ORDER_FUNCTION_CALL];
+
+  console.log("[colour_random] Returning:", returnValue);
+  return returnValue;
+};
+
+
+
 
 Blockly.Arduino['colour_rgb'] = function (block) {
     // Compose a colour from RGB components expressed as percentages.

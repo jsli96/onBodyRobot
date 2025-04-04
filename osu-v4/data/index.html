@@ -650,39 +650,51 @@
         }
         }
 
-        function executeSequence() {
-            var commands = getLoopCommands();
-            console.log("Extracted commands:", commands);  // Print the full array of commands
-            
-            var totalDelay = 0;
-            var defaultDelay = 5000; // Adjust this delay if needed
-            
-            commands.forEach(function(line) {
-                console.log("Processing command line:", line);  // Print each command line
-                // Map each line to a corresponding endpoint.
-                let command = "";  // Use let so that each iteration has its own copy
-                if (line === "moveForward();") {
-                    command = "moveForward";
-                } else if (line === "moveBackward();") {
-                    command = "moveBackward";
-                } else if (line === "stopMotor();") {
-                    command = "stopMotor";
+    function executeSequence() {
+        var commands = getLoopCommands(); 
+        var totalDelay = 0;
+        var defaultDelay = 5000; // Default duration in ms if none is specified
+
+        commands.forEach(function(line) {
+            line = line.trim();
+            console.log("Processing command:", line);
+
+            // ✅ 1. Detect color comparison
+            if (line.includes("getCurrentLEDColor()")) {
+                const match = line.match(/getCurrentLEDColor\(\)\s*==\s*["'](#\w{6})["']/);
+                if (match) {
+                    const expectedColor = match[1];
+                    console.log("Detected color check:", expectedColor);
+
+                    // ✅ 2. Send it to the server as a special color-check command
+                    fetch("/execute/" + encodeURIComponent("CHECK_COLOR:" + expectedColor))
+                        .then(response => response.json())
+                        .then(data => console.log("Sent color check to server:", data))
+                        .catch(err => console.error("Error sending color check", err));
                 } else {
-                    console.warn("Unrecognized command:", line);
-                return;
+                    console.warn("Malformed getCurrentLEDColor() check:", line);
                 }
-                
-                setTimeout(function() {
-                    fetch("/execute/" + command)
+                return;  // ✅ Skip further processing for this line
+            }
+
+            // ✅ 3. Handle normal commands with optional duration (e.g., moveForward(1000))
+            let durationMatch = line.match(/\((\d+)\)/);
+            let duration = durationMatch ? parseInt(durationMatch[1]) : defaultDelay;
+
+            console.log("Scheduling command:", line, "at", totalDelay, "ms");
+
+            setTimeout(function() {
+                console.log("Sending command:", line);
+                fetch("/execute/" + encodeURIComponent(line))
                     .then(response => response.json())
-                    .then(data => console.log("Executed command:", data))
-                    .catch(err => console.error("Error executing command", command, err));
-                }, totalDelay);
-                
-                // Increase the total delay.
-                totalDelay += defaultDelay;
-            });
-        }
+                    .then(data => console.log("Executed command:", line, data))
+                    .catch(err => console.error("Error executing command", line, err));
+            }, totalDelay);
+
+            totalDelay += duration;
+        });
+    }
+
     </script>
 
 <script>
@@ -779,26 +791,32 @@
             init: function() {
                 this.appendDummyInput()
                     .appendField("Motor")
-                    .appendField(new Blockly.FieldDropdown([["Forward", "F"], ["Backward", "B"], ["Stop", "S"]]), "DIRECTION");
+                    .appendField(new Blockly.FieldDropdown([["Forward", "F"], ["Backward", "B"], ["Stop", "S"]]), "DIRECTION")
+                    .appendField("for")
+                    .appendField(new Blockly.FieldTextInput("5"), "DURATION")
+                    .appendField("s");
                 this.setPreviousStatement(true, null);
                 this.setNextStatement(true, null);
                 this.setColour(230);
-                this.setTooltip("Controls motor direction.");
+                this.setTooltip("Controls motor direction for a duration (in seconds).");
             }
         };
+
     
         Blockly.Arduino['motor_control'] = function(block) {
             var direction = block.getFieldValue('DIRECTION');
+            var duration = Number(block.getFieldValue('DURATION')) * 1000; // convert seconds to ms
             var code = "";
             if (direction === "F") {
-                code += "moveForward();\n";
+                code += "moveForward(" + duration + ");\n";
             } else if (direction === "B") {
-                code += "moveBackward();\n";
+                code += "moveBackward(" + duration + ");\n";
             } else {
                 code += "stopMotor();\n";
             }
             return code;
         };
+
 
     </script>
     
