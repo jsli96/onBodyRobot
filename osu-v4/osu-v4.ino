@@ -1,30 +1,43 @@
+/***************************************************************************
+ * New Program: Rotating Display with Swipe and Motor Control
+ *
+ * Features:
+ *  - Continuously rotates the displayed image based on the IMU’s tilt.
+ *  - Supports 3 images stored in PROGMEM; swiping left/right cycles through them.
+ *    When you lift your finger (after a brief debounce delay), the program
+ *    calculates the difference between the starting and ending touch coordinates.
+ *    If the horizontal difference exceeds a set threshold, it cycles to the next
+ *    or previous image.
+ *  - Includes motor control functions via an MCP23017 (for future integration).
+ *  - Uses CHSC6x-based touch functions from lv_xiao_round_screen.h.
+ *  - WiFi functionality is omitted for now.
+ *
+ * Note: Ensure that "my_images.h" defines images[], imageSizes[], and imageCount.
+ ***************************************************************************/
+
 #include <TFT_eSPI.h>
 #include <Wire.h>
 #include <SPI.h>
 #define USE_TFT_ESPI_LIBRARY
-#include "lv_xiao_round_screen.h"  // For CHSC6x-based touch
+#include "lv_xiao_round_screen.h"  // Provides touch functions: chsc6x_is_pressed(), chsc6x_get_xy()
 #include <PNGdec.h>
 #include <Adafruit_MCP23X17.h>
 #include <WiFi.h>
 #include "esp_wifi.h"
+#include "ICM_20948.h"     // IMU library (using I2C)
+//#define USE_SPI         // Uncomment if using SPI for the IMU
 
+#include <Adafruit_NeoPixel.h>
 
-Adafruit_MCP23X17 mcp;
-
-// ICM-20948
-#include "ICM_20948.h"
-//#define USE_SPI // Uncomment if using SPI
-
+// Hardware definitions
 #define SERIAL_PORT Serial
 #define WIRE_PORT   Wire
 #define AD0_VAL     1
 #define SPI_PORT    SPI
 #define CS_PIN      1
 
-#include <Adafruit_NeoPixel.h>
-
-#define LED_PIN   D2    // Change to D2 if needed
-#define NUM_LEDS  1     // Number of WS2812B LEDs
+#define LED_PIN   D2      // For NeoPixel LED
+#define NUM_LEDS  1       // Adjust if needed
 
 #ifdef USE_SPI
 ICM_20948_SPI myICM;
@@ -32,89 +45,65 @@ ICM_20948_SPI myICM;
 ICM_20948_I2C myICM;
 #endif
 
-PNG png;
+IPAddress local_IP(192, 168, 1, 50);  // Choose an IP not likely in use (e.g., 192.168.1.50)
+IPAddress gateway(192, 168, 1, 1);     // Typically your router's IP address
+IPAddress subnet(255, 255, 255, 0);    // Standard subnet mask for a /24 network
+IPAddress primaryDNS(8, 8, 8, 8);       // Public DNS (optional)
+IPAddress secondaryDNS(8, 8, 4, 4);     // Public DNS (optional)
 
-Adafruit_NeoPixel strip(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
 
-// Static IP configuration based on your iPhone hotspot settings:
-IPAddress local_IP(172, 20, 10, 10);   // Choose an available IP (example: 172.20.10.10)
-IPAddress gateway(172, 20, 10, 1);       // Likely your hotspot's IP
-IPAddress subnet(255, 255, 255, 240);    // As seen from the netmask
-IPAddress primaryDNS(8, 8, 8, 8);         // Public DNS (optional)
-IPAddress secondaryDNS(8, 8, 4, 4);       // Public DNS (optional)
-
-const char* ssid = "atp236";
-const char* password = "88888888";
+const char* ssid = "TP-LINK_lab0102";
+const char* password = "LAB0102!!!";
 
 WiFiServer server(3333);  // Listen on port 3333
+PNG png;
+Adafruit_MCP23X17 mcp;         // MCP23017 for motor control
+Adafruit_NeoPixel strip(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
 
-unsigned long motorCommandStart = 0;
-unsigned long motorDuration = 0;  // Duration (in ms) for the current motor command
-bool motorActive = false;
+// Image handling
+#include "my_images.h" // Ensure this file defines images[], imageSizes[], and imageCount (3 images)
 
-String incomingCommand = "";
-
-// For reading touch
-bool lastPressed = false;
-lv_coord_t startX = 0, startY = 0;
-lv_coord_t lastX  = 0, lastY  = 0;
-
-// We'll keep track of which image is displayed
+// Global variables for image display
 int currentImageIndex = 0;
-
-// Include your images in PROGMEM
-#include "my_images.h" // e.g. image1.h, image2.h, image3.h, etc.
-
-// 240x240 Buffer to hold the decoded PNG (unrotated).
-static uint16_t rawImage[240 * 240]; // ~112 KB in 16-bit color
-
-// Dimensions of the current image (from PNG header)
-static int imgWidth  = 0;
-static int imgHeight = 0;
-
-// A small struct for PNGdec callback
-typedef struct {
-  bool convertTo565;
-} USERDATA;
-
-const char* calico_version = "osu-v4";  // Make sure this matches file name
-
-#define MOTOR_IN1 14  // MCP23017 Pin D3
-#define MOTOR_IN2 15  // MCP23017 Pin D4
-
-// Calico movement state variable
-String moveStatus = "stop";
-
-// Global vars for lighting task
-String ledStatus = "off";
-int rrr = 0;
-int ggg = 0;
-int bbb = 0;
-int br = 0;  // blink rate in msecs (really this is the duration of half a cycle)
+static uint16_t rawImage[240 * 240]; // Framebuffer for a 240x240 image
+static int imgWidth = 0, imgHeight = 0;
 
 float lastAngle = -1;
 unsigned long lastRotationUpdate = 0;
 const int ROTATION_UPDATE_INTERVAL = 150; // ms
 
-//----------------------------------------------------------------------------------
-// PNG Callback: decode each line into rawImage[]
-//----------------------------------------------------------------------------------
-void PNGDrawCallback(PNGDRAW *pDraw)
-{
-  if (pDraw->y >= 240) return; // safety check
+// --- Touch (swipe) state machine ---
+enum TouchState { IDLE, TOUCH_ACTIVE, TOUCH_RELEASED, GESTURE_PROCESSED };
+TouchState touchState = IDLE;
+unsigned long releaseTime = 0;         // Time when touch was first detected as released
+const unsigned long RELEASE_DEBOUNCE_MS = 50;  // Wait 50 ms after release before processing swipe
 
+lv_coord_t startX = 0, startY = 0;  // Where the touch started
+lv_coord_t lastX = 0, lastY = 0;    // Latest touch coordinates
+const int SWIPE_THRESHOLD = 30;     // Minimum horizontal distance (pixels) for a valid swipe
+
+// Motor control variables
+unsigned long motorCommandStart = 0;
+unsigned long motorDuration = 0;
+bool motorActive = false;
+#define MOTOR_IN1 14  // MCP23017 pin for Motor IN1
+#define MOTOR_IN2 15  // MCP23017 pin for Motor IN2
+
+//-------------------------------------------------------------
+// PNGDrawCallback: Decodes one line of the PNG into rawImage.
+void PNGDrawCallback(PNGDRAW *pDraw) {
+  if (pDraw->y >= 240) return;
   uint16_t *dest = &rawImage[pDraw->y * imgWidth];
   png.getLineAsRGB565(pDraw, dest, PNG_RGB565_BIG_ENDIAN, 0xFFFFFFFF);
 }
 
-//----------------------------------------------------------------------------------
-// Show image: decode the PNG into rawImage[] (no rotation yet)
-//----------------------------------------------------------------------------------
+//-------------------------------------------------------------
+// showImage: Decodes a PROGMEM-stored image into rawImage.
 void showImage(int index) {
-  SERIAL_PORT.println("Attempting to decode image...");
+  SERIAL_PORT.println("Decoding image...");
   int rc = png.openFLASH((uint8_t *)images[index], imageSizes[index], PNGDrawCallback);
   if (rc == PNG_SUCCESS) {
-    imgWidth  = png.getWidth();
+    imgWidth = png.getWidth();
     imgHeight = png.getHeight();
     rc = png.decode(nullptr, PNG_FAST_PALETTE);
     if (rc == PNG_SUCCESS) {
@@ -129,41 +118,41 @@ void showImage(int index) {
   }
 }
 
-//----------------------------------------------------------------------------------
-// Check Swipe
-//----------------------------------------------------------------------------------
-void checkSwipe() {
-  const int SWIPE_THRESHOLD = 30;
-  int deltaX = lastX - startX;
-  if (deltaX > SWIPE_THRESHOLD) {
-    currentImageIndex--;
-    if (currentImageIndex < 0) currentImageIndex = imageCount - 1;
-    showImage(currentImageIndex);
-    float angle = readTiltAngle();
-    drawRotated(-angle);
-    lastAngle = angle;
-    SERIAL_PORT.println("Swipe Right -> Previous Image");
-  }
-  else if (deltaX < -SWIPE_THRESHOLD) {
-    currentImageIndex++;
-    if (currentImageIndex >= imageCount) currentImageIndex = 0;
-    showImage(currentImageIndex);
-    float angle = readTiltAngle();
-    drawRotated(-angle);
-    lastAngle = angle;
-    SERIAL_PORT.println("Swipe Left -> Next Image");
-  }
-  else {
-    SERIAL_PORT.println("No valid swipe detected.");
+//-------------------------------------------------------------
+// drawRotated: Rotates the image by angleDeg and updates the display.
+void drawRotated(float angleDeg) {
+  float angleRad = angleDeg * (PI / 180.0);
+  float cosA = cos(angleRad);
+  float sinA = sin(angleRad);
+  float cx = imgWidth * 0.5;
+  float cy = imgHeight * 0.5;
+  float screenCx = 120.0, screenCy = 120.0;
+  static uint16_t lineBuf[240];
+  
+  for (int yS = 0; yS < 240; yS++) {
+    for (int xS = 0; xS < 240; xS++) {
+      float dx = xS - screenCx;
+      float dy = yS - screenCy;
+      float xSrcF = cosA * dx + sinA * dy + cx;
+      float ySrcF = -sinA * dx + cosA * dy + cy;
+      int xSrc = (int)(xSrcF + 0.5);
+      int ySrc = (int)(ySrcF + 0.5);
+      if (xSrc < 0 || xSrc >= imgWidth || ySrc < 0 || ySrc >= imgHeight) {
+        lineBuf[xS] = 0x0000;
+      } else {
+        lineBuf[xS] = rawImage[ySrc * imgWidth + xSrc];
+      }
+    }
+    tft.pushImage(0, yS, 240, 1, lineBuf);
+    yield();
   }
 }
 
-//----------------------------------------------------------------------------------
-// Compute tilt angle from accelerometer
-//----------------------------------------------------------------------------------
+//-------------------------------------------------------------
+// readTiltAngle: Reads the IMU to compute a tilt angle.
 float readTiltAngle() {
   if (myICM.dataReady()) {
-    myICM.getAGMT(); // update accelerometer
+    myICM.getAGMT();
   }
   float ax = myICM.accX();
   float ay = myICM.accY();
@@ -175,49 +164,73 @@ float readTiltAngle() {
   return angle;
 }
 
-//----------------------------------------------------------------------------------
-// drawRotated(angle):
-//   Modified to yield after each row to avoid blocking for too long.
-//----------------------------------------------------------------------------------
-void drawRotated(float angleDeg)
-{
-  float angleRad = angleDeg * (PI / 180.0);
-  float cosA = cos(angleRad);
-  float sinA = sin(angleRad);
-  float cx = imgWidth  * 0.5;
-  float cy = imgHeight * 0.5;
-  float screenCx = 120.0;
-  float screenCy = 120.0;
-  static uint16_t lineBuf2[240];
-
-  for (int yS = 0; yS < 240; yS++) {
-    for (int xS = 0; xS < 240; xS++) {
-      float dx = xS - screenCx;
-      float dy = yS - screenCy;
-      float xSrcF =  cosA * dx + sinA * dy + cx;
-      float ySrcF = -sinA * dx + cosA * dy + cy;
-      int xSrc = (int)(xSrcF + 0.5f);
-      int ySrc = (int)(ySrcF + 0.5f);
-      if (xSrc < 0 || xSrc >= imgWidth || ySrc < 0 || ySrc >= imgHeight) {
-        lineBuf2[xS] = 0x0000; // black
-      } else {
-        lineBuf2[xS] = rawImage[ySrc * imgWidth + xSrc];
-      }
-    }
-    tft.pushImage(0, yS, 240, 1, lineBuf2);
-    // Yield after drawing each row so background tasks can run.
-    yield();
+//-------------------------------------------------------------
+// processSwipe: Called once when a stable release is detected.
+// It calculates the difference between the starting and ending positions,
+// and if the horizontal difference exceeds SWIPE_THRESHOLD, it cycles images.
+void processSwipe() {
+  int deltaX = lastX - startX;
+  if (deltaX > SWIPE_THRESHOLD) {
+    // Finger moved right → next image.
+    currentImageIndex++;
+    if (currentImageIndex >= imageCount) currentImageIndex = 0;
+    showImage(currentImageIndex);
+    float angle = readTiltAngle();
+    drawRotated(-angle);
+    SERIAL_PORT.println("Swipe Right -> Next Image");
+  } else if (deltaX < -SWIPE_THRESHOLD) {
+    // Finger moved left → previous image.
+    currentImageIndex--;
+    if (currentImageIndex < 0) currentImageIndex = imageCount - 1;
+    showImage(currentImageIndex);
+    float angle = readTiltAngle();
+    drawRotated(-angle);
+    SERIAL_PORT.println("Swipe Left -> Previous Image");
+  } else {
+    SERIAL_PORT.println("No valid swipe detected.");
   }
 }
 
+//-------------------------------------------------------------
+// Motor Control Functions
+void setupMotorControl() {
+  if (!mcp.begin_I2C(0x20)) {
+    Serial.println("Failed to initialize MCP23017!");
+    while (1) { yield(); }
+  }
+  mcp.pinMode(MOTOR_IN1, OUTPUT);
+  mcp.pinMode(MOTOR_IN2, OUTPUT);
+  stopMotor();
+  SERIAL_PORT.println("Motor control initialized.");
+}
+
+void moveForward() {
+  mcp.digitalWrite(MOTOR_IN1, HIGH);
+  mcp.digitalWrite(MOTOR_IN2, LOW);
+}
+
+void moveBackward() {
+  mcp.digitalWrite(MOTOR_IN1, LOW);
+  mcp.digitalWrite(MOTOR_IN2, HIGH);
+}
+
+void stopMotor() {
+  mcp.digitalWrite(MOTOR_IN1, LOW);
+  mcp.digitalWrite(MOTOR_IN2, LOW);
+}
+
+//-------------------------------------------------------------
+// setup: Initializes display, IMU, touch, motor, and loads the first image.
 void setup() {
   Serial.begin(115200);
   Serial.println("Setup starting...");
 
+  // Configure static IP
   if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
     Serial.println("Static IP configuration failed");
   }
 
+  // Begin WiFi connection
   WiFi.begin(ssid, password);
   delay(500);
 
@@ -227,92 +240,63 @@ void setup() {
     Serial.print(".");
     yield();  // Yield during WiFi connection loop
   }
-  Serial.println("Connected!");
+  Serial.println("\nConnected!");
   Serial.println(WiFi.localIP());
 
   // Disable WiFi power saving (light sleep)
   esp_wifi_set_ps(WIFI_PS_NONE);
 
+  // Start server
   server.begin();
 
   Serial.print("Setup task running on core ");
   Serial.println(xPortGetCoreID());
 
-  #ifdef USE_SPI
-    SPI_PORT.begin();
-    myICM.begin(CS_PIN, SPI_PORT);
-  #else
-    WIRE_PORT.begin();
-    WIRE_PORT.setClock(400000);
-    myICM.begin(WIRE_PORT, AD0_VAL);
-  #endif
-
-  if (myICM.status != ICM_20948_Stat_Ok) {
-    SERIAL_PORT.println("ICM init failed!");
-  } else {
-    SERIAL_PORT.println("ICM init OK!");
-  }
-
+  // Initialize TFT display
   tft.init();
   tft.setRotation(0);
   tft.fillScreen(TFT_BLACK);
 
+  // Initialize touch
   pinMode(TOUCH_INT, INPUT_PULLUP);
+  Wire.begin();
 
-  showImage(currentImageIndex);
+  // Initialize IMU
+  WIRE_PORT.begin();
+  WIRE_PORT.setClock(400000);
+  myICM.begin(WIRE_PORT, AD0_VAL);
+  if (myICM.status != ICM_20948_Stat_Ok) {
+    SERIAL_PORT.println("IMU init failed!");
+  } else {
+    SERIAL_PORT.println("IMU init OK!");
+  }
+
+  // Initialize motor control
   setupMotorControl();
-}
 
-void setupMotorControl() {
-    if (!mcp.begin_I2C(0x20)) {  // Initialize MCP23017 at address 0x20
-        Serial.println("Failed to initialize MCP23017!");
-        while (1) { yield(); }  // Prevent blocking indefinitely
-    }
-    mcp.pinMode(14, OUTPUT);  // D3 (Motor_IN1)
-    mcp.pinMode(15, OUTPUT);  // D4 (Motor_IN2)
-    strip.begin();
-    strip.show();
-    stopMotor(); // Ensure motor is off initially
-    Serial.println("Motor control initialized!");
-}
+  // Initialize LED strip
+  strip.begin();
+  strip.show();
 
-void moveForward() {
-    mcp.digitalWrite(MOTOR_IN1, HIGH);
-    mcp.digitalWrite(MOTOR_IN2, LOW);
+  // Load the first image
+  showImage(currentImageIndex);
 }
-
-void moveBackward() {
-    mcp.digitalWrite(MOTOR_IN1, LOW);
-    mcp.digitalWrite(MOTOR_IN2, HIGH);
-}
-
-void stopMotor() {
-    mcp.digitalWrite(MOTOR_IN1, LOW);
-    mcp.digitalWrite(MOTOR_IN2, LOW);
-}
-
-String getCurrentLEDColor() {
-  char buf[8];
-  sprintf(buf, "#%02X%02X%02X", rrr, ggg, bbb);  // Assuming rrr/ggg/bbb are your current RGB values
-  return String(buf);
-}
-
 
 void processSerialCommand(String cmd) {
   cmd.trim();
   // Reset previous motor command immediately.
   motorActive = false;
 
-  if (cmd.startsWith("CHECK_COLOR:")) {
-    String expected = cmd.substring(String("CHECK_COLOR:").length());
-    String current = getCurrentLEDColor();  // You’ll define this below
-    if (expected.equalsIgnoreCase(current)) {
-      Serial.println("LED color matches: " + expected);
-    } else {
-      Serial.println("LED color mismatch. Expected: " + expected + ", Found: " + current);
-    }
-    return;
-  }
+  // if (cmd.startsWith("CHECK_COLOR:")) {
+  //   String expected = cmd.substring(String("CHECK_COLOR:").length());
+  //   String current = getCurrentLEDColor();  // You’ll define this below
+  //   if (expected.equalsIgnoreCase(current)) {
+  //     Serial.println("LED color matches: " + expected);
+  //   } else {
+  //     Serial.println("LED color mismatch. Expected: " + expected + ", Found: " + current);
+  //   }
+  //   return;
+  // }
   
   if (cmd.startsWith("moveForward(")) {
     int startIdx = cmd.indexOf('(');
@@ -362,75 +346,75 @@ void processSerialCommand(String cmd) {
   }
 }
 
-// Global variables for non-blocking LED fill
-bool ledFilling = false;
-uint32_t targetLEDColor = 0;
-uint8_t ledWaitTime = 50; // time per LED update in ms
-int currentLED = 0;
-unsigned long lastLedUpdate = 0;
 
-void startColorFill(uint32_t color, uint8_t wait) {
-  targetLEDColor = color;
-  ledWaitTime = wait;
-  currentLED = 0;
-  ledFilling = true;
-  lastLedUpdate = millis();
-
-  // ✅ Set global RGB values
-  rrr = (color >> 16) & 0xFF;
-  ggg = (color >> 8) & 0xFF;
-  bbb = color & 0xFF;
-  
-  for (int i = 0; i < strip.numPixels(); i++) {
-    strip.setPixelColor(i, 0);
-  }
-  strip.show();
-}
-
-void updateColorFill() {
-  if (ledFilling && (millis() - lastLedUpdate >= ledWaitTime)) {
-    strip.setPixelColor(currentLED, targetLEDColor);
-    strip.show();
-    currentLED++;
-    lastLedUpdate = millis();
-    if (currentLED >= strip.numPixels()) {
-      ledFilling = false;
-    }
-  }
-}
-
+//-------------------------------------------------------------
+// loop: Main program loop with touch state machine.
 void loop() {
-  bool isPressed = chsc6x_is_pressed();
-  if (isPressed) {
-    lv_coord_t x, y;
-    chsc6x_get_xy(&x, &y);
-    if (!lastPressed) {
-      startX = x;
-      startY = y;
-    }
-    lastX = x;
-    lastY = y;
-  } else {
-    if (lastPressed) {
-      checkSwipe();
-    }
+  bool rawPressed = chsc6x_is_pressed();
+  
+  // Update state machine:
+  switch(touchState) {
+    case IDLE:
+      if (rawPressed) {
+        // Finger has just touched: record start coordinates.
+        chsc6x_get_xy(&startX, &startY);
+        touchState = TOUCH_ACTIVE;
+      }
+      break;
+      
+    case TOUCH_ACTIVE:
+      if (rawPressed) {
+        // While touching, update current coordinates.
+        chsc6x_get_xy(&lastX, &lastY);
+      } else {
+        // Finger just lifted: record release time.
+        releaseTime = millis();
+        touchState = TOUCH_RELEASED;
+      }
+      break;
+      
+    case TOUCH_RELEASED:
+      // Wait until the sensor remains off for RELEASE_DEBOUNCE_MS.
+      if (!rawPressed && (millis() - releaseTime >= RELEASE_DEBOUNCE_MS)) {
+        // Final coordinates.
+        chsc6x_get_xy(&lastX, &lastY);
+        processSwipe();   // Process the swipe gesture once.
+        touchState = GESTURE_PROCESSED;
+      } else if (rawPressed) {
+        // If the finger comes back quickly, consider it still active.
+        touchState = TOUCH_ACTIVE;
+      }
+      break;
+      
+    case GESTURE_PROCESSED:
+      // Wait until the sensor stays off for a while before returning to IDLE.
+      if (!rawPressed && (millis() - releaseTime >= (RELEASE_DEBOUNCE_MS + 200))) {
+        touchState = IDLE;
+      }
+      // Alternatively, if the finger touches again, go to TOUCH_ACTIVE.
+      if (rawPressed) {
+        chsc6x_get_xy(&startX, &startY);
+        touchState = TOUCH_ACTIVE;
+      }
+      break;
   }
-  lastPressed = isPressed;
-
+  
+  // --- Continuous Rotation Update ---
   unsigned long currentTime = millis();
-  if (!isPressed && (currentTime - lastRotationUpdate > ROTATION_UPDATE_INTERVAL)) {
+  if (currentTime - lastRotationUpdate > ROTATION_UPDATE_INTERVAL) {
     float angle = readTiltAngle();
     if (fabs(angle - lastAngle) > 5.0) {
       drawRotated(-angle);
       lastAngle = angle;
-      lastRotationUpdate = currentTime;
     }
+    lastRotationUpdate = currentTime;
   }
-
+  
+  // --- Motor Control (for future integration) ---
   if (motorActive && (millis() - motorCommandStart >= motorDuration)) {
     stopMotor();
     motorActive = false;
-    Serial.println("Motor command duration elapsed; motor stopped.");
+    SERIAL_PORT.println("Motor command duration elapsed; motor stopped.");
   }
 
   // Handle incoming WiFi client commands (non-blocking):
@@ -455,19 +439,5 @@ void loop() {
     }
     client.stop();
     Serial.println("TCP client disconnected.");
-  }
-
-  updateColorFill();
-
-  static unsigned long lastFillChange = 0;
-  if (millis() - lastFillChange > 500) {
-    static bool toggle = false;
-    if (toggle) {
-      startColorFill(strip.Color(255, 0, 0), 50);
-    } else {
-      startColorFill(strip.Color(0, 255, 0), 50);
-    }
-    toggle = !toggle;
-    lastFillChange = millis();
   }
 }

@@ -11,7 +11,7 @@ DATA_FOLDER = os.path.join(BASE_DIR, "data")
 
 app = Flask(__name__)
 
-ESP32_IP = "172.20.10.10"
+ESP32_IP = "192.168.1.50"
 ESP32_PORT = 3333
 
 def send_command_via_wifi(command):
