@@ -274,8 +274,10 @@ void setup() {
   // Initialize motor control
   setupMotorControl();
 
-  // Initialize LED strip
+  // --- Initialize LED strip ---
   strip.begin();
+  // Set the first LED (index 0) to red (RGB: 255, 0, 0)
+  strip.setPixelColor(0, strip.Color(255, 0, 0));
   strip.show();
 
   // Load the first image
