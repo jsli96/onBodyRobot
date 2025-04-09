@@ -261,7 +261,7 @@
     <category name="%{BKY_CATCOLOUR}" categorystyle="colour_category">
         <block type="colour_picker"></block>
         <block type="colour_random"></block>
-        <block type="colour_rgb">
+        <!-- <block type="colour_rgb">
             <value name="RED">
                 <shadow type="math_number">
                     <field name="NUM">100</field>
@@ -277,7 +277,7 @@
                     <field name="NUM">0</field>
                 </shadow>
             </value>
-        </block>
+        </block> -->
         <block type="colour_blend">
             <value name="COLOUR1">
                 <shadow type="colour_picker">

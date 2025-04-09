@@ -20,7 +20,7 @@ Blockly.Blocks['colour_random'] = {
     this.appendDummyInput()
         .appendField(Blockly.Msg["COLOUR_RANDOM_TITLE"]);
     this.setOutput(true, "String");  // This tells Blockly it's a string-returning value block
-    this.setColour(160);             // Optional: you can customize the color
+    this.setColour("#A6745C");
     this.setTooltip(Blockly.Msg["COLOUR_RANDOM_TOOLTIP"]);
     this.setHelpUrl("");
   }
@@ -35,13 +35,18 @@ Blockly.Arduino['colour_picker'] = function (block) {
 Blockly.Blocks['colour_picker'] = {
   init: function () {
     this.appendDummyInput()
-        .appendField(new Blockly.FieldColour("#ff0000"), "COLOUR");
-    this.setOutput(true, "String");  // ✅ ← add this so it plugs into string sockets
-    this.setColour(160);
-    this.setTooltip("Pick a color");
+        .appendField(new Blockly.FieldDropdown([
+          ["Red", "#FF0000"],
+          ["Green", "#00FF00"],
+          ["Blue", "#0000FF"]
+        ]), "COLOUR");
+    this.setOutput(true, "String");  // Allow the block to plug into string sockets.
+    this.setColour("#A6745C");        // Use the same brown shade as your colour toolbox.
+    this.setTooltip("Pick a colour (Red, Green, or Blue)");
     this.setHelpUrl("");
   }
 };
+
 
 
 Blockly.Arduino['colour_random'] = function (block) {
@@ -71,23 +76,23 @@ Blockly.Arduino['colour_random'] = function (block) {
 
 
 
-Blockly.Arduino['colour_rgb'] = function (block) {
-    // Compose a colour from RGB components expressed as percentages.
-    var red = Blockly.Arduino.valueToCode(block, 'RED', Blockly.Arduino.ORDER_COMMA) || 0;
-    var green = Blockly.Arduino.valueToCode(block, 'GREEN', Blockly.Arduino.ORDER_COMMA) || 0;
-    var blue = Blockly.Arduino.valueToCode(block, 'BLUE', Blockly.Arduino.ORDER_COMMA) || 0;
-    var functionName = Blockly.Arduino.provideFunction_(
-            'colourRgb',
-            ['String ' + Blockly.Arduino.FUNCTION_NAME_PLACEHOLDER_ +
-                        '(int r, int g, int b) {',
-                '  r = max(min(r * 2.55, 255), 0);',
-                '  g = max(min(g * 2.55, 255), 0);',
-                '  b = max(min(b * 2.55, 255), 0);',
-                '  return (\'#\' + String(r, HEX) + String(g, HEX) + String(b, HEX));',
-                '}']);
-    var code = functionName + '(' + red + ', ' + green + ', ' + blue + ')';
-    return [code, Blockly.Arduino.ORDER_FUNCTION_CALL];
-};
+// Blockly.Arduino['colour_rgb'] = function (block) {
+//     // Compose a colour from RGB components expressed as percentages.
+//     var red = Blockly.Arduino.valueToCode(block, 'RED', Blockly.Arduino.ORDER_COMMA) || 0;
+//     var green = Blockly.Arduino.valueToCode(block, 'GREEN', Blockly.Arduino.ORDER_COMMA) || 0;
+//     var blue = Blockly.Arduino.valueToCode(block, 'BLUE', Blockly.Arduino.ORDER_COMMA) || 0;
+//     var functionName = Blockly.Arduino.provideFunction_(
+//             'colourRgb',
+//             ['String ' + Blockly.Arduino.FUNCTION_NAME_PLACEHOLDER_ +
+//                         '(int r, int g, int b) {',
+//                 '  r = max(min(r * 2.55, 255), 0);',
+//                 '  g = max(min(g * 2.55, 255), 0);',
+//                 '  b = max(min(b * 2.55, 255), 0);',
+//                 '  return (\'#\' + String(r, HEX) + String(g, HEX) + String(b, HEX));',
+//                 '}']);
+//     var code = functionName + '(' + red + ', ' + green + ', ' + blue + ')';
+//     return [code, Blockly.Arduino.ORDER_FUNCTION_CALL];
+// };
 
 Blockly.Arduino['colour_blend'] = function (block) {
     // Blend two colours together.

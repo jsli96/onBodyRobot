@@ -461,7 +461,7 @@
       <field name="COLOUR">#ff0000</field>
     </block>
     <block type="colour_random"></block>
-    <block type="colour_rgb">
+    <!-- <block type="colour_rgb">
       <value name="RED">
         <shadow type="math_number">
           <field name="NUM">0</field>
@@ -477,7 +477,7 @@
           <field name="NUM">0</field>
         </shadow>
       </value>
-    </block>
+    </block> -->
     <block type="colour_blend">
       <value name="COLOUR1">
         <shadow type="colour_picker">

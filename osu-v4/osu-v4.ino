@@ -68,6 +68,9 @@ int currentImageIndex = 0;
 static uint16_t rawImage[240 * 240]; // Framebuffer for a 240x240 image
 static int imgWidth = 0, imgHeight = 0;
 
+// Global variable to store the current LED color.
+uint32_t currentLEDColor = 0;
+
 float lastAngle = -1;
 unsigned long lastRotationUpdate = 0;
 const int ROTATION_UPDATE_INTERVAL = 150; // ms
@@ -88,6 +91,37 @@ unsigned long motorDuration = 0;
 bool motorActive = false;
 #define MOTOR_IN1 14  // MCP23017 pin for Motor IN1
 #define MOTOR_IN2 15  // MCP23017 pin for Motor IN2
+
+// Set LED to red.
+void setLEDColorRed() {
+  currentLEDColor = strip.Color(255, 0, 0);  // Red (R=255, G=0, B=0).
+  strip.setPixelColor(0, currentLEDColor);
+  strip.show();
+  Serial.println("LED color changed to RED");
+}
+
+// Set LED to green.
+void setLEDColorGreen() {
+  currentLEDColor = strip.Color(0, 255, 0);  // Green (R=0, G=255, B=0).
+  strip.setPixelColor(0, currentLEDColor);
+  strip.show();
+  Serial.println("LED color changed to GREEN");
+}
+
+// Set LED to blue.
+void setLEDColorBlue() {
+  currentLEDColor = strip.Color(0, 0, 255);  // Blue (R=0, G=0, B=255).
+  strip.setPixelColor(0, currentLEDColor);
+  strip.show();
+  Serial.println("LED color changed to BLUE");
+}
+
+// Get the current LED color as a hex string (e.g., "#FF0000").
+String getCurrentLEDColor() {
+  char buffer[8];
+  sprintf(buffer, "#%06X", (unsigned int)(currentLEDColor & 0xFFFFFF));
+  return String(buffer);
+}
 
 //-------------------------------------------------------------
 // PNGDrawCallback: Decodes one line of the PNG into rawImage.
@@ -277,7 +311,8 @@ void setup() {
   // --- Initialize LED strip ---
   strip.begin();
   // Set the first LED (index 0) to red (RGB: 255, 0, 0)
-  strip.setPixelColor(0, strip.Color(255, 0, 0));
+  currentLEDColor = strip.Color(255, 0, 0);
+  strip.setPixelColor(0, currentLEDColor);
   strip.show();
 
   // Load the first image
@@ -289,16 +324,28 @@ void processSerialCommand(String cmd) {
   // Reset previous motor command immediately.
   motorActive = false;
 
-  // if (cmd.startsWith("CHECK_COLOR:")) {
-  //   String expected = cmd.substring(String("CHECK_COLOR:").length());
-  //   String current = getCurrentLEDColor();  // You’ll define this below
-  //   if (expected.equalsIgnoreCase(current)) {
-  //     Serial.println("LED color matches: " + expected);
-  //   } else {
-  //     Serial.println("LED color mismatch. Expected: " + expected + ", Found: " + current);
-  //   }
-  //   return;
-  // }
+  if (cmd == "setRed") {
+    setLEDColorRed();
+    return;
+  }
+  if (cmd == "setGreen") {
+    setLEDColorGreen();
+    return;
+  }
+  if (cmd == "setBlue") {
+    setLEDColorBlue();
+    return;
+  }
+  if (cmd.startsWith("CHECK_COLOR:")) {
+    String expected = cmd.substring(String("CHECK_COLOR:").length());
+    String current = getCurrentLEDColor();
+    if (expected.equalsIgnoreCase(current)) {
+      Serial.println("LED color matches: " + expected);
+    } else {
+      Serial.println("LED color mismatch. Expected: " + expected + ", Found: " + current);
+    }
+    return;
+  }
   
   if (cmd.startsWith("moveForward(")) {
     int startIdx = cmd.indexOf('(');

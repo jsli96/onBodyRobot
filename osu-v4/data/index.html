@@ -650,50 +650,135 @@
         }
         }
 
-    function executeSequence() {
-        var commands = getLoopCommands(); 
-        var totalDelay = 0;
-        var defaultDelay = 5000; // Default duration in ms if none is specified
-
-        commands.forEach(function(line) {
-            line = line.trim();
-            console.log("Processing command:", line);
-
-            // ✅ 1. Detect color comparison
-            if (line.includes("getCurrentLEDColor()")) {
-                const match = line.match(/getCurrentLEDColor\(\)\s*==\s*["'](#\w{6})["']/);
-                if (match) {
-                    const expectedColor = match[1];
-                    console.log("Detected color check:", expectedColor);
-
-                    // ✅ 2. Send it to the server as a special color-check command
-                    fetch("/execute/" + encodeURIComponent("CHECK_COLOR:" + expectedColor))
-                        .then(response => response.json())
-                        .then(data => console.log("Sent color check to server:", data))
-                        .catch(err => console.error("Error sending color check", err));
-                } else {
-                    console.warn("Malformed getCurrentLEDColor() check:", line);
-                }
-                return;  // ✅ Skip further processing for this line
-            }
-
-            // ✅ 3. Handle normal commands with optional duration (e.g., moveForward(1000))
-            let durationMatch = line.match(/\((\d+)\)/);
-            let duration = durationMatch ? parseInt(durationMatch[1]) : defaultDelay;
-
-            console.log("Scheduling command:", line, "at", totalDelay, "ms");
-
-            setTimeout(function() {
-                console.log("Sending command:", line);
-                fetch("/execute/" + encodeURIComponent(line))
-                    .then(response => response.json())
-                    .then(data => console.log("Executed command:", line, data))
-                    .catch(err => console.error("Error executing command", line, err));
-            }, totalDelay);
-
-            totalDelay += duration;
-        });
+    // Helper function: evaluates a condition with dynamic variable substitution.
+function evaluateCondition(condition, variables) {
+  // List of reserved words that should not be wrapped in quotes.
+  const reserved = ["if", "else", "true", "false", "null", "undefined"];
+  
+  const processed = condition.replace(/\b[a-zA-Z_][a-zA-Z0-9_]*\b/g, function(name) {
+    // For tokens starting with "my_", treat them as numbers.
+    if (name.indexOf("my_") === 0) {
+      if (variables.hasOwnProperty(name)) {
+        return variables[name].toString();
+      } else {
+        // Extract the part after "my_", replace underscores with periods (e.g. "my_1_0" becomes "1.0")
+        let numPart = name.substring(3);
+        numPart = numPart.replace(/_/g, '.');
+        if (numPart !== "" && !isNaN(Number(numPart))) {
+          return Number(numPart).toString();
+        } else {
+          return "undefined";
+        }
+      }
+    } else {
+      // For non-"my_" tokens, if they're reserved words, leave them as-is.
+      if (reserved.indexOf(name) !== -1) {
+        return name;
+      }
+      // Otherwise, treat them as string literals.
+      return JSON.stringify(name);
     }
+  });
+  
+  console.log("Evaluating rewritten condition:", processed);
+  
+  try {
+    return Function(`return (${processed});`)();
+  } catch (err) {
+    console.error("Error evaluating rewritten condition:", err);
+    return false;
+  }
+}
+
+function executeSequence() {
+  const commands = getLoopCommands();
+  let totalDelay = 0;
+  const defaultDelay = 5000;
+
+  // Dynamic variable storage.
+  const variables = {};
+
+  // Flags for conditional processing.
+  let skipBlock = false;
+  let inIfBlock = false;
+
+  commands.forEach((line) => {
+    line = line.trim();
+    console.log("Processing:", line);
+
+    // Detect variable assignments like "int my_1 = 5;" or "my_1 = 5;" or even string assignments.
+    // For numbers, we expect tokens like "my_1" and for strings, you might later extend this regex.
+    const assignMatch = line.match(/(?:int\s+)?(my_[a-zA-Z0-9_]+)\s*=\s*(\d+(?:\.\d+)?);?/);
+    if (assignMatch) {
+      const name = assignMatch[1];
+      const value = parseFloat(assignMatch[2]);
+      variables[name] = value;
+      console.log(`Set variable ${name} = ${value}`);
+      return; // Skip executing assignments.
+    }
+    
+    // (If you want to support string assignments, you might detect those with a different regex and store
+    // the value as a string in the variables object. For example:
+    // const strAssignMatch = line.match(/(?:string\s+)?([a-zA-Z0-9_]+)\s*=\s*["']([^"']+)["'];?/);
+    // and then store variables[name] = the captured string.)
+
+    // Detect the start of an if block, for example "if (test1 != test) {"
+    const ifMatch = line.match(/^if\s*\((.*?)\)\s*{?$/);
+    if (ifMatch) {
+      const condition = ifMatch[1];
+      inIfBlock = true;
+      const result = evaluateCondition(condition, variables);
+      console.log(`Evaluated condition "${condition}" =>`, result);
+      skipBlock = !result;
+      return;
+    }
+
+    // Detect the end of a block.
+    if (line === "}") {
+      inIfBlock = false;
+      skipBlock = false;
+      return;
+    }
+
+    // If inside an if block that evaluated to false, skip this command.
+    if (inIfBlock && skipBlock) {
+      console.log("Skipping:", line);
+      return;
+    }
+
+    // Special handling for LED color checks.
+    if (line.includes("getCurrentLEDColor()")) {
+      const match = line.match(/getCurrentLEDColor\(\)\s*==\s*["'](#\w{6})["']/);
+      if (match) {
+        const expectedColor = match[1];
+        console.log("Detected color check:", expectedColor);
+        fetch("/execute/" + encodeURIComponent("CHECK_COLOR:" + expectedColor))
+          .then((res) => res.json())
+          .then((data) => console.log("Color check result:", data))
+          .catch((err) => console.error("Color check error:", err));
+      } else {
+        console.warn("Malformed color check:", line);
+      }
+      return;
+    }
+
+    // Regular command processing (e.g., moveForward(1000)).
+    const durationMatch = line.match(/\((\d+)\)/);
+    const duration = durationMatch ? parseInt(durationMatch[1]) : defaultDelay;
+    console.log("Scheduling command:", line, "in", totalDelay, "ms");
+    
+    setTimeout(() => {
+      console.log("Sending command:", line);
+      fetch("/execute/" + encodeURIComponent(line))
+        .then((res) => res.json())
+        .then((data) => console.log("Executed command:", data))
+        .catch((err) => console.error("Execution error:", err));
+    }, totalDelay);
+    
+    totalDelay += duration;
+  });
+}
+
 
     </script>
 
