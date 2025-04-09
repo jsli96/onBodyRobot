@@ -212,6 +212,9 @@ var toolbox_standard = {
                 }, {
                   "kind": "block",
                     "type": "colour_random"
+                },  {
+                  "kind": "block",
+                  "type": "colour_setLED"
                 }
             ]
         }, {

@@ -118,3 +118,36 @@ Blockly.Arduino['colour_blend'] = function (block) {
     var code = functionName + '(' + c1 + ', ' + c2 + ', ' + ratio + ')';
     return [code, Blockly.Arduino.ORDER_FUNCTION_CALL];
 };
+
+// New block to change the LED color via an action.
+// This block will generate a call to the corresponding LED color function.
+Blockly.Blocks['colour_setLED'] = {
+  init: function () {
+    this.appendDummyInput()
+        .appendField("change LED color to")
+        .appendField(new Blockly.FieldDropdown([
+          ["Red", "RED"],
+          ["Green", "GREEN"],
+          ["Blue", "BLUE"]
+        ]), "LED_COLOR");
+    this.setPreviousStatement(true, null);
+    this.setNextStatement(true, null);
+    this.setColour("#A6745C");
+    this.setTooltip("Changes the LED to the selected color.");
+    this.setHelpUrl("");
+  }
+};
+
+Blockly.Arduino['colour_setLED'] = function (block) {
+  var color = block.getFieldValue('LED_COLOR');
+  var code = "";
+  if (color === "RED") {
+    code += "setRed";  // instead of "setLEDColorRed();"
+  } else if (color === "GREEN") {
+    code += "setGreen";
+  } else if (color === "BLUE") {
+    code += "setBlue";
+  }
+  return code + "\n";
+};
+

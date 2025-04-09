@@ -27,7 +27,7 @@
 #include "ICM_20948.h"     // IMU library (using I2C)
 //#define USE_SPI         // Uncomment if using SPI for the IMU
 
-#include <Adafruit_NeoPixel.h>
+#include <FastLED.h>
 
 // Hardware definitions
 #define SERIAL_PORT Serial
@@ -58,7 +58,18 @@ const char* password = "LAB0102!!!";
 WiFiServer server(3333);  // Listen on port 3333
 PNG png;
 Adafruit_MCP23X17 mcp;         // MCP23017 for motor control
-Adafruit_NeoPixel strip(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
+
+// Define a global array to store LED data.
+CRGB leds[NUM_LEDS];
+
+enum LEDCommand {
+  LED_NONE,
+  LED_RED,
+  LED_GREEN,
+  LED_BLUE
+};
+
+volatile LEDCommand pendingLEDCommand = LED_NONE;
 
 // Image handling
 #include "my_images.h" // Ensure this file defines images[], imageSizes[], and imageCount (3 images)
@@ -94,25 +105,22 @@ bool motorActive = false;
 
 // Set LED to red.
 void setLEDColorRed() {
-  currentLEDColor = strip.Color(255, 0, 0);  // Red (R=255, G=0, B=0).
-  strip.setPixelColor(0, currentLEDColor);
-  strip.show();
+  leds[0] = CRGB::Red;   // FastLED provides built-in colors.
+  FastLED.show();
   Serial.println("LED color changed to RED");
 }
 
 // Set LED to green.
 void setLEDColorGreen() {
-  currentLEDColor = strip.Color(0, 255, 0);  // Green (R=0, G=255, B=0).
-  strip.setPixelColor(0, currentLEDColor);
-  strip.show();
+  leds[0] = CRGB::Green;
+  FastLED.show();
   Serial.println("LED color changed to GREEN");
 }
 
 // Set LED to blue.
 void setLEDColorBlue() {
-  currentLEDColor = strip.Color(0, 0, 255);  // Blue (R=0, G=0, B=255).
-  strip.setPixelColor(0, currentLEDColor);
-  strip.show();
+  leds[0] = CRGB::Blue;
+  FastLED.show();
   Serial.println("LED color changed to BLUE");
 }
 
@@ -308,12 +316,12 @@ void setup() {
   // Initialize motor control
   setupMotorControl();
 
-  // --- Initialize LED strip ---
-  strip.begin();
-  // Set the first LED (index 0) to red (RGB: 255, 0, 0)
-  currentLEDColor = strip.Color(255, 0, 0);
-  strip.setPixelColor(0, currentLEDColor);
-  strip.show();
+  // Initialize FastLED. For most WS2812 or compatible LEDs:
+  FastLED.addLeds<WS2812, LED_PIN, GRB>(leds, NUM_LEDS);
+  
+  // Initialize LED to red as an example.
+  leds[0] = CRGB::Red;
+  FastLED.show();
 
   // Load the first image
   showImage(currentImageIndex);
@@ -325,15 +333,16 @@ void processSerialCommand(String cmd) {
   motorActive = false;
 
   if (cmd == "setRed") {
-    setLEDColorRed();
+    // Instead of directly calling setLEDColorRed(), set the pending command.
+    pendingLEDCommand = LED_RED;
     return;
   }
   if (cmd == "setGreen") {
-    setLEDColorGreen();
+    pendingLEDCommand = LED_GREEN;
     return;
   }
   if (cmd == "setBlue") {
-    setLEDColorBlue();
+    pendingLEDCommand = LED_BLUE;
     return;
   }
   if (cmd.startsWith("CHECK_COLOR:")) {
@@ -400,6 +409,25 @@ void processSerialCommand(String cmd) {
 // loop: Main program loop with touch state machine.
 void loop() {
   bool rawPressed = chsc6x_is_pressed();
+
+  if(pendingLEDCommand != LED_NONE) {
+    switch(pendingLEDCommand) {
+      case LED_RED:
+        setLEDColorRed();
+        break;
+      case LED_GREEN:
+        setLEDColorGreen();
+        break;
+      case LED_BLUE:
+        setLEDColorBlue();
+        break;
+      default:
+        break;
+    }
+    pendingLEDCommand = LED_NONE;
+    vTaskDelay(10 / portTICK_PERIOD_MS);  // Give time for the LED update to settle.
+}
+
   
   // Update state machine:
   switch(touchState) {
