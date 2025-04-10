@@ -9,6 +9,12 @@
  * @author scanet@libreduc.cc (SebCanet)
  */
 
+// Ensure the flag is defined globally.
+window.Code = window.Code || {};
+if (typeof Code.imageConversionDone === 'undefined') {
+  Code.imageConversionDone = false;
+}
+
 /*
  * auto save and restore blocks
  */
@@ -376,6 +382,116 @@ Code.saveXmlBlocklyFile = function () {
 };
 
 /**
+ * Load an image from a local file (supports any image type).
+ */
+Code.loadImageFile = function () {
+    // Define the event handler for when an image file is selected.
+    var parseInputImageFile = function (e) {
+        var files = e.target.files;
+        if (!files || files.length === 0) {
+            console.error('No file selected.');
+            return;
+        }
+        var reader = new FileReader();
+
+        // Once the file is loaded, create and display an image element.
+        reader.onload = function (event) {
+            var imageDataUrl = event.target.result; // Data URL of the image.
+            // Create an <img> element.
+            var imgElement = document.createElement('img');
+            imgElement.src = imageDataUrl;
+            imgElement.alt = 'Loaded Image';
+
+            // Optionally, set width/height or add any additional styling here.
+            // For example: imgElement.style.maxWidth = "100%";
+            
+            // Append the image to a container element if it exists.
+            var container = document.getElementById('imageContainer');
+            if (!container) {
+                document.body.appendChild(imgElement);
+            } else {
+                container.appendChild(imgElement);
+            }
+        };
+
+        // Handle file reading errors.
+        reader.onerror = function (error) {
+            console.error('Error reading image file:', error);
+        };
+
+        // Read the file as a Data URL.
+        reader.readAsDataURL(files[0]);
+    };
+
+    // Create or retrieve the invisible file input element.
+    var selectFile = document.getElementById('select_file');
+    if (selectFile === null) {
+        var selectFileDom = document.createElement('input');
+        selectFileDom.type = 'file';
+        selectFileDom.id = 'select_file';
+        // Accept any image file type: PNG, JPEG, GIF, etc.
+        selectFileDom.accept = 'image/*';
+        selectFileDom.style.display = 'none';
+        document.body.appendChild(selectFileDom);
+        selectFile = document.getElementById('select_file');
+
+        // Attach the change event listener.
+        selectFile.addEventListener('change', parseInputImageFile, false);
+    }
+
+    // Optionally remove the input element once a file is clicked.
+    selectFile.onclick = function destroyClickedElement(event) {
+        document.body.removeChild(event.target);
+    };
+
+    // Trigger the file selection dialog.
+    selectFile.click();
+};
+
+/**
+ * Convert an uploaded image file into a C header file (.h) 
+ * that contains a byte array representing the image data in hexadecimal format.
+ * Once a picture is uploaded and converted, further clicks will not trigger the file explorer.
+ */
+Code.uploadImageForConversion = function () {
+        const fileInput = document.createElement("input");
+        fileInput.type = "file";
+        fileInput.accept = "image/*";
+        fileInput.style.display = "none";
+        document.body.appendChild(fileInput);
+      
+        fileInput.addEventListener("change", function(event) {
+          const file = event.target.files[0];
+          if (!file) {
+            console.error("No file selected.");
+            return;
+          }
+          
+          const formData = new FormData();
+          formData.append("file", file);
+      
+ // Send the file to the server's upload_and_convert endpoint.
+ fetch("http://127.0.0.1:5001/upload_and_convert", { 
+    method: "POST",
+    body: formData
+  })
+    .then(response => response.json())
+    .then(data => {
+      console.log("Server response:", data);
+      // Optionally, remove the file input element after successful upload.
+      document.body.removeChild(fileInput);
+    })
+    .catch(err => {
+      console.error("Error uploading file:", err);
+    });
+});
+        
+        fileInput.click();
+      }
+  
+
+
+/**
  * Load blocks from local file.
  */
 Code.loadXmlBlocklyFile = function () {
@@ -416,6 +532,102 @@ Code.loadXmlBlocklyFile = function () {
 
     selectFile.click();
 };
+
+/**
+ * Convert an uploaded image file into a C header file (.h) 
+ * that contains a byte array representing the image data in hexadecimal format.
+ * Once a picture is uploaded and converted, further clicks will not trigger the file explorer.
+ */
+Code.convertImageToHeaderFile = function () {
+    // Check if a conversion has already been done.
+    if (Code.imageConversionDone) {
+      console.log("Image already converted. No need to open the file explorer again.");
+      return;
+    }
+  
+    // Create an invisible file input element.
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = "image/*"; // Accept any image type.
+    fileInput.style.display = "none";
+    document.body.appendChild(fileInput);
+  
+    // Add an event listener to process the file when it's selected.
+    fileInput.addEventListener("change", function (event) {
+      const file = event.target.files[0];
+      if (!file) {
+        console.error("No file selected.");
+        return;
+      }
+  
+      // Create a FileReader to read the file as an ArrayBuffer.
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const arrayBuffer = e.target.result;
+        const byteArray = new Uint8Array(arrayBuffer);
+        const totalBytes = byteArray.length;
+  
+        // Build the header string.
+        let headerContent = "";
+        headerContent += `// array size is ${totalBytes}\n`;
+        // Use the file name (without extension) as the array name.
+        let arrayName = file.name.split(".")[0];
+        headerContent += `static const unsigned char ${arrayName}[] PROGMEM = {\n`;
+  
+        // Convert each byte to a hexadecimal string.
+        const bytesPerLine = 16;
+        for (let i = 0; i < totalBytes; i++) {
+          const hex = byteArray[i].toString(16).padStart(2, "0");
+          headerContent += "0x" + hex;
+          if (i !== totalBytes - 1) {
+            headerContent += ", ";
+          }
+          // Insert a newline every few bytes for readability.
+          if ((i + 1) % bytesPerLine === 0) {
+            headerContent += "\n";
+          }
+        }
+        headerContent += "\n};\n";
+  
+        // Create a Blob from the header content.
+        const blob = new Blob([headerContent], { type: "text/plain" });
+        const url = URL.createObjectURL(blob);
+  
+        // Log information about the generated Blob URL
+        console.log(`Download URL generated: ${url}`);
+        console.log(`The file should be downloaded to your browser’s default download folder.`);
+  
+        // Create a temporary <a> element to trigger a download.
+        const downloadLink = document.createElement("a");
+        downloadLink.href = url;
+        // Append ".h" to the file base name.
+        downloadLink.download = arrayName + ".h";
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+  
+        // Clean up: remove the temporary link and revoke the Blob URL.
+        document.body.removeChild(downloadLink);
+        URL.revokeObjectURL(url);
+  
+        // Set a flag so that the file explorer won’t pop up again.
+        Code.imageConversionDone = true;
+        
+        // Remove the file input element now after processing.
+        document.body.removeChild(fileInput);
+      };
+  
+      reader.onerror = function (error) {
+        console.error("Error reading file:", error);
+      };
+  
+      // Read the file as an ArrayBuffer.
+      reader.readAsArrayBuffer(file);
+    });
+  
+    // Trigger the file selection dialog.
+    fileInput.click();
+  };
+  
 
 /**
  * Parses the XML from its input to generate and replace the blocks in the

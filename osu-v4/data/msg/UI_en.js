@@ -39,7 +39,7 @@ var MSG = {
     newButton_span: "New project",
     save_span: "Save file name?",
     saveXMLButton_span: "Save to BlocklyDuino file",
-    loadXMLfakeButton_span: "Load BlocklyDuino file",
+    loadXMLfakeButton_span: "Load picture file",
     loadXML_span: "Replace existing blocks?\n'Cancel' will merge.",
     loadXML_error_span: "Error parsing XML:\n",
     resetButton_span: "Reset BlocklyDuino",
