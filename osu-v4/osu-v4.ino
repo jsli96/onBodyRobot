@@ -80,7 +80,7 @@ static uint16_t rawImage[240 * 240]; // Framebuffer for a 240x240 image
 static int imgWidth = 0, imgHeight = 0;
 
 // Global variable to store the current LED color.
-uint32_t currentLEDColor = 0;
+uint32_t currentLEDColor = 0xFF0000;
 
 float lastAngle = -1;
 unsigned long lastRotationUpdate = 0;
@@ -105,7 +105,10 @@ bool motorActive = false;
 
 // Set LED to red.
 void setLEDColorRed() {
-  leds[0] = CRGB::Red;   // FastLED provides built-in colors.
+  leds[0] = CRGB::Red;
+  currentLEDColor = 0xFF0000; // Update global variable to red.
+  Serial.print("DEBUG: Setting LED to RED, currentLEDColor = 0x");
+  Serial.println(currentLEDColor, HEX);
   FastLED.show();
   Serial.println("LED color changed to RED");
 }
@@ -113,6 +116,9 @@ void setLEDColorRed() {
 // Set LED to green.
 void setLEDColorGreen() {
   leds[0] = CRGB::Green;
+  currentLEDColor = 0x00FF00; // Update global variable to green.
+  Serial.print("DEBUG: Setting LED to GREEN, currentLEDColor = 0x");
+  Serial.println(currentLEDColor, HEX);
   FastLED.show();
   Serial.println("LED color changed to GREEN");
 }
@@ -120,16 +126,24 @@ void setLEDColorGreen() {
 // Set LED to blue.
 void setLEDColorBlue() {
   leds[0] = CRGB::Blue;
+  currentLEDColor = 0x0000FF; // Update global variable to blue.
+  Serial.print("DEBUG: Setting LED to BLUE, currentLEDColor = 0x");
+  Serial.println(currentLEDColor, HEX);
   FastLED.show();
   Serial.println("LED color changed to BLUE");
 }
+
 
 // Get the current LED color as a hex string (e.g., "#FF0000").
 String getCurrentLEDColor() {
   char buffer[8];
   sprintf(buffer, "#%06X", (unsigned int)(currentLEDColor & 0xFFFFFF));
-  return String(buffer);
+  String colorStr = String(buffer);
+  Serial.print("DEBUG: getCurrentLEDColor() returning ");
+  Serial.println(colorStr);
+  return colorStr;
 }
+
 
 //-------------------------------------------------------------
 // PNGDrawCallback: Decodes one line of the PNG into rawImage.
@@ -327,7 +341,7 @@ void setup() {
   showImage(currentImageIndex);
 }
 
-void processSerialCommand(String cmd) {
+void processSerialCommand(String cmd, WiFiClient &client) {
   cmd.trim();
   // Reset previous motor command immediately.
   motorActive = false;
@@ -345,16 +359,16 @@ void processSerialCommand(String cmd) {
     pendingLEDCommand = LED_BLUE;
     return;
   }
-  if (cmd.startsWith("CHECK_COLOR:")) {
-    String expected = cmd.substring(String("CHECK_COLOR:").length());
-    String current = getCurrentLEDColor();
-    if (expected.equalsIgnoreCase(current)) {
-      Serial.println("LED color matches: " + expected);
-    } else {
-      Serial.println("LED color mismatch. Expected: " + expected + ", Found: " + current);
-    }
-    return;
-  }
+
+if (cmd == "GET_LED_COLOR") {
+  String currentColor = getCurrentLEDColor();
+  Serial.print("DEBUG: GET_LED_COLOR command processed. LED Color = ");
+  Serial.println(currentColor);
+  client.println(currentColor);  // This sends the LED color back to the webpage.
+  return;
+}
+
+
   
   if (cmd.startsWith("moveForward(")) {
     int startIdx = cmd.indexOf('(');
@@ -506,7 +520,7 @@ void loop() {
           command.trim();
           Serial.print("Received over WiFi: ");
           Serial.println(command);
-          processSerialCommand(command);
+          processSerialCommand(command, client);  // Pass the client reference here
           command = "";
         } else {
           command += c;

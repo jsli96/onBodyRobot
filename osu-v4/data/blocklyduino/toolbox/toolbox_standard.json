@@ -243,13 +243,6 @@ var toolbox_standard = {
                     "name": "%{BKY_CAT_VAR_TEXT}",
                     "categorystyle": "variable_category",
                     "custom": "VARIABLE_TYPED_TEXT"
-                }, {
-                    "kind": "category",
-					"level": "2",
-					"levels": "1,2,3",
-                    "name": "%{BKY_CAT_VAR_BOOLEAN}",
-                    "categorystyle": "variable_category",
-                    "custom": "VARIABLE_TYPED_BOOLEAN"
                 }
             ]
         }, {

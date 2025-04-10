@@ -650,48 +650,63 @@
         }
         }
 
-    // Helper function: evaluates a condition with dynamic variable substitution.
-function evaluateCondition(condition, variables) {
-  // List of reserved words that should not be wrapped in quotes.
-  const reserved = ["if", "else", "true", "false", "null", "undefined"];
-  
-  const processed = condition.replace(/\b[a-zA-Z_][a-zA-Z0-9_]*\b/g, function(name) {
-    // For tokens starting with "my_", treat them as numbers.
-    if (name.indexOf("my_") === 0) {
-      if (variables.hasOwnProperty(name)) {
-        return variables[name].toString();
+        function evaluateCondition(condition, variables) {
+  // Pre‐process any getCurrentLEDColor() calls.
+  if (condition.includes("getCurrentLEDColor()")) {
+    const ledColor = getCurrentLEDColor(); // Expected to return a string like "#FF0000"
+    console.log("getCurrentLEDColor() returned:", ledColor);
+    // Replace all occurrences with a properly quoted string.
+    condition = condition.replace(/getCurrentLEDColor\(\)/g, `"${ledColor}"`);
+    console.log("Condition after LED substitution:", condition);
+  }
+
+  // Build a "preamble" to declare all my_ variables found in the condition.
+  // We expect tokens of the form my_ followed only by digits and underscores.
+  const tokenPattern = /\b(my_[0-9_]+)\b/g;
+  let preamble = "";
+  let match;
+  const declared = {};
+  while ((match = tokenPattern.exec(condition)) !== null) {
+    const varName = match[1];
+    if (!(varName in variables) && !declared[varName]) {
+      // Remove the "my_" prefix and replace underscores with a dot.
+      let numberStr = varName.substring(3).replace(/_/g, ".");
+      let numValue = parseFloat(numberStr);
+      if (!isNaN(numValue)) {
+        console.log(`Token ${varName} not found in variables; declaring it as ${numValue}.`);
+        preamble += `var ${varName} = ${numValue};\n`;
       } else {
-        // Extract the part after "my_", replace underscores with periods (e.g. "my_1_0" becomes "1.0")
-        let numPart = name.substring(3);
-        numPart = numPart.replace(/_/g, '.');
-        if (numPart !== "" && !isNaN(Number(numPart))) {
-          return Number(numPart).toString();
-        } else {
-          return "undefined";
-        }
+        console.log(`Token ${varName} not found in variables and cannot be parsed as a number; declaring as 0.`);
+        preamble += `var ${varName} = 0;\n`;
       }
-    } else {
-      // For non-"my_" tokens, if they're reserved words, leave them as-is.
-      if (reserved.indexOf(name) !== -1) {
-        return name;
-      }
-      // Otherwise, treat them as string literals.
-      return JSON.stringify(name);
+      declared[varName] = true;
+    } else if (varName in variables) {
+      console.log(`Token ${varName} found with value: ${variables[varName]}`);
     }
-  });
+  }
+
+  // Now add definitions for any variables already present.
+  for (const key in variables) {
+    preamble += `var ${key} = ${variables[key]};\n`;
+  }
   
-  console.log("Evaluating rewritten condition:", processed);
+  console.log("Preamble for evaluation:\n", preamble);
+  console.log("Final condition to evaluate:", condition);
   
   try {
-    return Function(`return (${processed});`)();
+    const evaluator = new Function(`${preamble} return (${condition});`);
+    const result = evaluator();
+    console.log(`Evaluated condition "${condition}" =>`, result);
+    return result;
   } catch (err) {
-    console.error("Error evaluating rewritten condition:", err);
+    console.error("Error evaluating condition:", err);
     return false;
   }
 }
 
 function executeSequence() {
   const commands = getLoopCommands();
+  console.log("Generated commands:", commands);
   let totalDelay = 0;
   const defaultDelay = 5000;
 
@@ -706,62 +721,52 @@ function executeSequence() {
     line = line.trim();
     console.log("Processing:", line);
 
-    // Detect variable assignments like "int my_1 = 5;" or "my_1 = 5;" or even string assignments.
-    // For numbers, we expect tokens like "my_1" and for strings, you might later extend this regex.
-    const assignMatch = line.match(/(?:int\s+)?(my_[a-zA-Z0-9_]+)\s*=\s*(\d+(?:\.\d+)?);?/);
+    // Detect variable assignments (numbers, e.g., "int my_1 = 5;")
+    const assignMatch = line.match(/(?:int\s+)?(my_[0-9_]+)\s*=\s*(\d+(?:\.\d+)?);?/);
     if (assignMatch) {
       const name = assignMatch[1];
       const value = parseFloat(assignMatch[2]);
       variables[name] = value;
       console.log(`Set variable ${name} = ${value}`);
-      return; // Skip executing assignments.
+      console.log("Current variables:", JSON.stringify(variables));
+      return; // Skip executing assignment lines.
     }
     
-    // (If you want to support string assignments, you might detect those with a different regex and store
-    // the value as a string in the variables object. For example:
-    // const strAssignMatch = line.match(/(?:string\s+)?([a-zA-Z0-9_]+)\s*=\s*["']([^"']+)["'];?/);
-    // and then store variables[name] = the captured string.)
-
-    // Detect the start of an if block, for example "if (test1 != test) {"
+    // Detect the start of an if block.
     const ifMatch = line.match(/^if\s*\((.*?)\)\s*{?$/);
     if (ifMatch) {
-      const condition = ifMatch[1];
+      let condition = ifMatch[1];
       inIfBlock = true;
+      
+      // Pre-evaluate any getCurrentLEDColor() calls.
+      if (condition.includes("getCurrentLEDColor()")) {
+        const ledColor = getCurrentLEDColor();
+        console.log("getCurrentLEDColor() returned:", ledColor);
+        // Replace with a quoted value.
+        condition = condition.replace(/getCurrentLEDColor\(\)/g, `"${ledColor}"`);
+        console.log("Condition after LED substitution:", condition);
+      }
+      
+      // Evaluate the condition.
       const result = evaluateCondition(condition, variables);
       console.log(`Evaluated condition "${condition}" =>`, result);
       skipBlock = !result;
-      return;
+      return; // Do not process the if header as a command.
     }
-
+    
     // Detect the end of a block.
     if (line === "}") {
       inIfBlock = false;
       skipBlock = false;
       return;
     }
-
-    // If inside an if block that evaluated to false, skip this command.
+    
+    // If inside an if block that evaluated false, skip this command.
     if (inIfBlock && skipBlock) {
       console.log("Skipping:", line);
       return;
     }
-
-    // Special handling for LED color checks.
-    if (line.includes("getCurrentLEDColor()")) {
-      const match = line.match(/getCurrentLEDColor\(\)\s*==\s*["'](#\w{6})["']/);
-      if (match) {
-        const expectedColor = match[1];
-        console.log("Detected color check:", expectedColor);
-        fetch("/execute/" + encodeURIComponent("CHECK_COLOR:" + expectedColor))
-          .then((res) => res.json())
-          .then((data) => console.log("Color check result:", data))
-          .catch((err) => console.error("Color check error:", err));
-      } else {
-        console.warn("Malformed color check:", line);
-      }
-      return;
-    }
-
+    
     // Regular command processing (e.g., moveForward(1000)).
     const durationMatch = line.match(/\((\d+)\)/);
     const duration = durationMatch ? parseInt(durationMatch[1]) : defaultDelay;
@@ -771,13 +776,14 @@ function executeSequence() {
       console.log("Sending command:", line);
       fetch("/execute/" + encodeURIComponent(line))
         .then((res) => res.json())
-        .then((data) => console.log("Executed command:", data))
-        .catch((err) => console.error("Execution error:", err));
+        .then((data) => console.log("Executed command:", line, data))
+        .catch((err) => console.error("Error executing command", line, err));
     }, totalDelay);
     
     totalDelay += duration;
   });
 }
+
 
 
     </script>
@@ -790,6 +796,29 @@ function executeSequence() {
         }
     });
     </script>
+
+<script>
+    function getCurrentLEDColor() {
+      var xhr = new XMLHttpRequest();
+      xhr.open("GET", "/execute/" + encodeURIComponent("GET_LED_COLOR"), false); // synchronous call
+      try {
+        xhr.send(null);
+        if (xhr.status === 200) {
+          // Parse the JSON response
+          let json = JSON.parse(xhr.responseText);
+          console.log("getCurrentLEDColor() returned:", json);
+          // Return the actual LED color from the JSON object.
+          return json.response;
+        }
+      } catch (e) {
+        console.error("Error in getCurrentLEDColor()", e);
+      }
+      return "";
+    }
+  </script>
+  
+  
+  
   
       
     </body>

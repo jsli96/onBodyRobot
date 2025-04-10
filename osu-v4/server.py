@@ -20,11 +20,14 @@ def send_command_via_wifi(command):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect((ESP32_IP, ESP32_PORT))
             s.sendall(command_str.encode())
-            # Optionally, you could wait and read a response here
-        return True
+            # Set a timeout so we don't block indefinitely
+            s.settimeout(2.0)
+            response = s.recv(1024).decode().strip()
+            return response  # Return the actual response from the ESP32
     except Exception as e:
         print("Error sending command via wifi:", e)
-        return False
+        return None
+
 
 @app.route('/')
 def index():
@@ -39,12 +42,17 @@ def execute_command(command):
     if command.startswith("CHECK_COLOR:"):
         expected_color = command.split(":", 1)[1]
         print("Received color check for:", expected_color)
-        # (Optionally: query the actual LED color if your ESP32 supports it)
-        # For now, just return it as confirmation
-        return jsonify({"status": "Color check received", "expected_color": expected_color})
+        # Send the command to the ESP32 and get the actual LED color back.
+        response = send_command_via_wifi(command)
+        # If the ESP32 is written to respond to CHECK_COLOR, then response will contain the current LED color.
+        if response is not None:
+            return jsonify({"status": "Color check response", "LED_color": response})
+        else:
+            return jsonify({"error": "Failed to retrieve LED color"}), 500
 
-    if send_command_via_wifi(command):
-        return jsonify({"status": "Command sent", "command": command}), 200
+    response = send_command_via_wifi(command)
+    if response is not None:
+        return jsonify({"status": "Command sent", "command": command, "response": response}), 200
     else:
         return jsonify({"error": "Failed to send command via WiFi"}), 500
 
