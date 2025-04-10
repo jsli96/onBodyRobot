@@ -588,45 +588,115 @@
       </script>
 
     <script>
-        function unrollForLoops(code) {
-        var lines = code.split('\n');
-        var expanded = [];
-        var i = 0;
+function unrollForLoops(code) {
+    var lines = code.split('\n');
+    var expanded = [];
+    var i = 0;
+    
+    while (i < lines.length) {
+        var line = lines[i].trim();
         
-        while (i < lines.length) {
-            var line = lines[i].trim();
-            if (line.startsWith("for(") || line.startsWith("for (")) {
-            // Extract iteration count, e.g., count < 3
-            var iterationMatch = line.match(/count\s*<\s*(\d+)/);
-            var iterations = iterationMatch ? parseInt(iterationMatch[1]) : 0;
+        // Handle for-loops.
+        if (line.startsWith("for(") || line.startsWith("for (")) {
+            // Regex to capture the variable name, starting value, operator (< or <=) and ending value.
+            var forLoopRegex = /for\s*\(\s*int\s+(\w+)\s*=\s*(\d+)\s*;\s*\1\s*(<|<=)\s*(\d+)\s*;/;
+            var match = line.match(forLoopRegex);
+            var iterations = 0;
+            if (match) {
+                var variable = match[1]; // Any variable name.
+                var start = parseInt(match[2]);
+                var operator = match[3];
+                var end = parseInt(match[4]);
+                
+                if (operator === "<") {
+                    iterations = end - start;
+                } else if (operator === "<=") {
+                    iterations = end - start + 1;
+                }
+            }
             
-            // Move forward until you find the line with "{"
+            // Advance until the opening "{" is found.
             while (i < lines.length && lines[i].indexOf("{") === -1) {
                 i++;
             }
-            // Now capture loop body lines until matching "}" is found
-            i++; // skip the line with "{"
+            i++; // Skip the "{" line.
+            
             var loopBlock = [];
+            // Capture lines inside the for-loop block.
             while (i < lines.length && lines[i].indexOf("}") === -1) {
                 var bodyLine = lines[i].trim();
                 if (bodyLine !== "") {
-                loopBlock.push(bodyLine);
+                    loopBlock.push(bodyLine);
                 }
                 i++;
             }
-            console.log("Found loop block with", iterations, "iterations:", loopBlock);
-            // Unroll the loop block
+            
+            console.log("Found for-loop block with", iterations, "iterations:", loopBlock);
+            // Unroll the for-loop body.
             for (var j = 0; j < iterations; j++) {
                 expanded = expanded.concat(loopBlock);
             }
             i++; // Skip the "}" line.
-            } else {
+        }
+        // Handle while-loops.
+        else if (line.startsWith("while(") || line.startsWith("while (")) {
+            // Instead of a regex, manually extract the condition to handle nested parentheses.
+            var startIndex = line.indexOf('(');
+            var depth = 0;
+            var endIndex = -1;
+            for (var k = startIndex; k < line.length; k++) {
+                var ch = line.charAt(k);
+                if (ch === '(') {
+                    depth++;
+                } else if (ch === ')') {
+                    depth--;
+                    if (depth === 0) {
+                        endIndex = k;
+                        break;
+                    }
+                }
+            }
+            var condition = line.substring(startIndex + 1, endIndex).trim();
+            
+            // Advance until the opening "{" is found.
+            while (i < lines.length && lines[i].indexOf("{") === -1) {
+                i++;
+            }
+            i++; // Skip the "{" line.
+            
+            var loopBlock = [];
+            // Capture the while-loop block.
+            while (i < lines.length && lines[i].indexOf("}") === -1) {
+                var bodyLine = lines[i].trim();
+                if (bodyLine !== "") {
+                    loopBlock.push(bodyLine);
+                }
+                i++;
+            }
+            console.log("Found while-loop block with condition (" + condition + "):", loopBlock);
+            
+            // Unroll the while-loop until the condition evaluates to false.
+            var maxIterations = 100; // safeguard to prevent infinite loops.
+            var count = 0;
+            // Pass an empty object for variables if not needed, or your current variables object.
+            while (count < maxIterations && evaluateCondition(condition, {})) {
+                expanded = expanded.concat(loopBlock);
+                count++;
+            }
+            if (count === maxIterations) {
+                console.warn("While-loop reached maximum iterations during unrolling.");
+            }
+            i++; // Skip the "}" line.
+        }
+        else {
             expanded.push(line);
             i++;
-            }
         }
-        return expanded;
-        }
+    }
+    return expanded;
+}
+
+
 
 
         function getLoopCommands() {
@@ -649,6 +719,7 @@
             return [];
         }
         }
+
 
         function evaluateCondition(condition, variables) {
   // Pre‐process any getCurrentLEDColor() calls.
