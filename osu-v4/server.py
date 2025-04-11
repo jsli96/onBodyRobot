@@ -5,6 +5,8 @@ import serial
 import time
 import threading
 import socket
+import os
+from glob import glob
 
 # Get the absolute path of the "data" folder
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -20,6 +22,47 @@ ESP32_PORT = 3333
 # Save in the directory where server.py is located.
 UPLOAD_FOLDER = os.path.dirname(os.path.abspath(__file__))
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+
+def regenerate_my_images_header():
+    """
+    Scans the upload directory for all header files (.h) except my_images.h and
+    lv_xiao_round_screen.h, then generates a master header file (my_images.h)
+    listing all found headers.
+    """
+    upload_folder = app.config['UPLOAD_FOLDER']
+    header_pattern = os.path.join(upload_folder, "*.h")
+    # Exclude my_images.h and lv_xiao_round_screen.h
+    excluded_files = {"my_images.h", "lv_xiao_round_screen.h"}
+    header_files = sorted([
+        f for f in glob(header_pattern)
+        if os.path.basename(f) not in excluded_files
+    ])
+    
+    # Generate include statements for each header.
+    includes = "\n".join(f'#include "{os.path.basename(f)}"' for f in header_files)
+    
+    # Build the array elements based on the filename (without extension).
+    image_names = ", ".join(os.path.splitext(os.path.basename(f))[0] for f in header_files)
+    image_sizes = ", ".join(f"sizeof({os.path.splitext(os.path.basename(f))[0]})" for f in header_files)
+    image_count = len(header_files)
+    
+    header_content = f"""#ifndef MY_IMAGES_H
+#define MY_IMAGES_H
+
+{includes}
+
+static const uint8_t* images[] = {{ {image_names} }};
+static const size_t imageSizes[] = {{ {image_sizes} }};
+static const int imageCount = {image_count};
+
+#endif
+"""
+    master_header_path = os.path.join(upload_folder, "my_images.h")
+    with open(master_header_path, "w") as f:
+        f.write(header_content)
+    print("my_images.h regenerated successfully.")
+
 
 def convert_image_to_header(file_bytes, original_filename):
     total_bytes = len(file_bytes)
@@ -88,21 +131,25 @@ def upload_and_convert():
         file_bytes = file.read()
         # Convert to header content.
         header_content = convert_image_to_header(file_bytes, file.filename)
-        # Determine the header file name.
+        # Use the original filename (without extension) as the array name.
         array_name = os.path.splitext(file.filename)[0]
         header_filename = array_name + ".h"
         header_file_path = os.path.join(app.config['UPLOAD_FOLDER'], header_filename)
-        # Write the header file to disk.
+        # Write the new header file to disk.
         with open(header_file_path, 'w') as f:
             f.write(header_content)
         
+        # Regenerate my_images.h to incorporate the new header.
+        regenerate_my_images_header()
+        
         return jsonify({
-            "message": "Converted header saved",
+            "message": "Converted header saved and my_images.h updated",
             "header_file": header_filename,
             "saved_to": header_file_path
         }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/execute/<command>', methods=['GET'])
 def execute_command(command):
