@@ -6,91 +6,59 @@ import time
 import threading
 import socket
 import os
+import requests
 from glob import glob
+from werkzeug.utils import secure_filename
 
 # Get the absolute path of the "data" folder
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FOLDER = os.path.join(BASE_DIR, "data")
+UPLOAD_FOLDER = os.path.join(BASE_DIR, "pics")
 
 app = Flask(__name__)
 CORS(app)  # Allow cross-origin requests from any domain
 
-
 ESP32_IP = "192.168.1.50"
 ESP32_PORT = 3333
 
-# Save in the directory where server.py is located.
-UPLOAD_FOLDER = os.path.dirname(os.path.abspath(__file__))
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
+@app.route('/upload_image', methods=['POST'])
+def upload_image():
+    # Ensure a file was provided.
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part in the request"}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No file selected"}), 400
 
-def regenerate_my_images_header():
-    """
-    Scans the upload directory for all header files (.h) except my_images.h and
-    lv_xiao_round_screen.h, then generates a master header file (my_images.h)
-    listing all found headers.
-    """
-    upload_folder = app.config['UPLOAD_FOLDER']
-    header_pattern = os.path.join(upload_folder, "*.h")
-    # Exclude my_images.h and lv_xiao_round_screen.h
-    excluded_files = {"my_images.h", "lv_xiao_round_screen.h"}
-    header_files = sorted([
-        f for f in glob(header_pattern)
-        if os.path.basename(f) not in excluded_files
-    ])
-    
-    # Generate include statements for each header.
-    includes = "\n".join(f'#include "{os.path.basename(f)}"' for f in header_files)
-    
-    # Build the array elements based on the filename (without extension).
-    image_names = ", ".join(os.path.splitext(os.path.basename(f))[0] for f in header_files)
-    image_sizes = ", ".join(f"sizeof({os.path.splitext(os.path.basename(f))[0]})" for f in header_files)
-    image_count = len(header_files)
-    
-    header_content = f"""#ifndef MY_IMAGES_H
-#define MY_IMAGES_H
+    try:
+        # Accept only PNG files.
+        if not file.filename.lower().endswith('.png'):
+            return jsonify({"error": "Only PNG files are allowed."}), 400
 
-{includes}
-
-static const uint8_t* images[] = {{ {image_names} }};
-static const size_t imageSizes[] = {{ {image_sizes} }};
-static const int imageCount = {image_count};
-
-#endif
-"""
-    master_header_path = os.path.join(upload_folder, "my_images.h")
-    with open(master_header_path, "w") as f:
-        f.write(header_content)
-    print("my_images.h regenerated successfully.")
-
-
-def convert_image_to_header(file_bytes, original_filename):
-    total_bytes = len(file_bytes)
-    # Use the original file name (without extension) as the array name.
-    array_name = os.path.splitext(original_filename)[0]
-    # Build the header content.
-    header_lines = []
-    header_lines.append(f"// array size is {total_bytes}")
-    header_lines.append(f"static const unsigned char {array_name}[] PROGMEM = {{")
-    
-    bytes_per_line = 16
-    for i, byte in enumerate(file_bytes):
-        # Convert byte to hex string.
-        hex_str = f"0x{byte:02x}"
-        # Determine if we need a comma. (Don't add a comma after the last byte)
-        if i < total_bytes - 1:
-            hex_str += ", "
-        else:
-            hex_str += ""
-        # Append the hex value to the current line.
-        # Start a new line every bytes_per_line entries.
-        if (i % bytes_per_line) == 0:
-            header_lines.append("    " + hex_str)
-        else:
-            header_lines[-1] += hex_str
-
-    header_lines.append("};\n")
-    return "\n".join(header_lines)
+        filename = secure_filename(file.filename)
+        image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        # Save the file to the pics folder.
+        file.save(image_path)
+        print("Saved file to:", image_path)
+        
+        # Now forward the file to the ESP32's upload endpoint.
+        # (Adjust the ESP32 URL/port if necessary.)
+        esp32_url = "http://192.168.1.50/upload_image"
+        with open(image_path, 'rb') as f:
+            files = {'file': (filename, f, file.content_type)}
+            response = requests.post(esp32_url, files=files)
+        
+        return jsonify({
+            "message": "Image saved and forwarded successfully",
+            "filename": filename,
+            "esp32_response": response.text
+        }), 200
+    except Exception as e:
+        print("Exception in upload_image:", e)
+        return jsonify({"error": str(e)}), 500
 
 def send_command_via_wifi(command):
     command_str = command + "\n"  # Append newline for the ESP32 command parser

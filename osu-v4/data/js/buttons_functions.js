@@ -453,42 +453,83 @@ Code.loadImageFile = function () {
  * that contains a byte array representing the image data in hexadecimal format.
  * Once a picture is uploaded and converted, further clicks will not trigger the file explorer.
  */
-Code.uploadImageForConversion = function () {
-        const fileInput = document.createElement("input");
-        fileInput.type = "file";
-        fileInput.accept = "image/*";
-        fileInput.style.display = "none";
-        document.body.appendChild(fileInput);
+// Code.uploadImageForConversion = function () {
+//         const fileInput = document.createElement("input");
+//         fileInput.type = "file";
+//         fileInput.accept = "image/*";
+//         fileInput.style.display = "none";
+//         document.body.appendChild(fileInput);
       
-        fileInput.addEventListener("change", function(event) {
-          const file = event.target.files[0];
-          if (!file) {
+//         fileInput.addEventListener("change", function(event) {
+//           const file = event.target.files[0];
+//           if (!file) {
+//             console.error("No file selected.");
+//             return;
+//           }
+          
+//           const formData = new FormData();
+//           formData.append("file", file);
+      
+//  // Send the file to the server's upload_and_convert endpoint.
+//  fetch("http://127.0.0.1:5001/upload_and_convert", { 
+//     method: "POST",
+//     body: formData
+//   })
+//     .then(response => response.json())
+//     .then(data => {
+//       console.log("Server response:", data);
+//       // Optionally, remove the file input element after successful upload.
+//       document.body.removeChild(fileInput);
+//     })
+//     .catch(err => {
+//       console.error("Error uploading file:", err);
+//     });
+// });
+        
+//         fileInput.click();
+//       }
+  
+Code.uploadImageForConversion = function () {
+    // Create an invisible file input element.
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = "image/png";
+    fileInput.style.display = "none";
+    document.body.appendChild(fileInput);
+
+    // Add an event listener to send the file when one is selected.
+    fileInput.addEventListener("change", function(event) {
+        const file = event.target.files[0];
+        if (!file) {
             console.error("No file selected.");
             return;
-          }
-          
-          const formData = new FormData();
-          formData.append("file", file);
-      
- // Send the file to the server's upload_and_convert endpoint.
- fetch("http://127.0.0.1:5001/upload_and_convert", { 
-    method: "POST",
-    body: formData
-  })
-    .then(response => response.json())
-    .then(data => {
-      console.log("Server response:", data);
-      // Optionally, remove the file input element after successful upload.
-      document.body.removeChild(fileInput);
-    })
-    .catch(err => {
-      console.error("Error uploading file:", err);
-    });
-});
+        }
         
-        fileInput.click();
-      }
-  
+        // Prepare the form data.
+        const formData = new FormData();
+        formData.append("file", file);
+        
+        // Send the file to the server's new upload endpoint.
+        // This endpoint should save the raw image for SPIFFS (e.g., "upload_image")
+        fetch("http://127.0.0.1:5001/upload_image", { 
+            method: "POST",
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log("Server response:", data);
+            // Remove the file input element after a successful upload.
+            document.body.removeChild(fileInput);
+        })
+        .catch(err => {
+            console.error("Error uploading file:", err);
+        });
+    });
+    
+    // Trigger the file selection dialog.
+    fileInput.click();
+};
+
 
 
 /**
