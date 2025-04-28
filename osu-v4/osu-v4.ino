@@ -105,6 +105,47 @@ bool motorActive = false;
 #define MOTOR_IN1 14
 #define MOTOR_IN2 15
 
+// ── Globals for animations ──
+int ballX = 120, ballY = 60;         // start in middle-top
+int ballDX = 2, ballDY = 2;          // pixels per frame
+const int ballRadius = 8;
+unsigned long lastBallUpdate = 0;
+const int BALL_SPEED = 20;           // ms per frame
+
+int health = 0;
+bool increasing = true;
+const int maxHealth = 100;
+unsigned long lastHealthUpdate = 0;
+const int HEALTH_BAR_SPEED = 30;  // smaller = faster pulse
+
+// ── Animations ──
+void drawBall() {
+  // erase previous (draw background)
+  tft.fillCircle(ballX, ballY, ballRadius+1, TFT_BLACK);
+  // update
+  ballX += ballDX;
+  ballY += ballDY;
+  // bounce on edges (screen is 240×240)
+  if (ballX < ballRadius || ballX > 240 - ballRadius) ballDX = -ballDX;
+  if (ballY < ballRadius || ballY > 120 - ballRadius) ballDY = -ballDY; 
+    // limit bounce to above the health-bar area
+  // draw new
+  tft.fillCircle(ballX, ballY, ballRadius, TFT_RED);
+}
+
+void drawHealthBar() {
+  int barWidth = map(health, 0, maxHealth, 0, 200);
+
+  // Background bar
+  tft.fillRect(20, 200, 200, 20, TFT_DARKGREY);
+
+  // Foreground pulse
+  tft.fillRect(20, 200, barWidth, 20, TFT_GREEN);
+
+  // Border (optional)
+  tft.drawRect(20, 200, 200, 20, TFT_WHITE);
+}
+
 // --------------------- ESP32 Upload Endpoint Functions ---------------------
 
 void handleUpload(AsyncWebServerRequest *request, String filename,
@@ -556,6 +597,8 @@ void processSerialCommand(String cmd, WiFiClient &client) {
 // --------------------- Main Loop ---------------------
 
 void loop() {
+  unsigned long now = millis();
+
   // Check for a new file upload.
   if (newFileUploaded) {
     newFileUploaded = false;
@@ -568,6 +611,24 @@ void loop() {
       Serial.println("No image files found after scanning.");
     }
   }
+
+  // ── Health-bar pulse ──
+  if (now - lastHealthUpdate >= HEALTH_BAR_SPEED) {
+    lastHealthUpdate = now;
+    if (increasing) {
+      if (++health >= maxHealth) increasing = false;
+    } else {
+      if (--health <= 0) increasing = true;
+    }
+    drawHealthBar();
+  }
+
+  // ── Ball animation ──
+  if (now - lastBallUpdate >= BALL_SPEED) {
+    lastBallUpdate = now;
+    drawBall();
+  }
+
   
   bool rawPressed = chsc6x_is_pressed();
 
