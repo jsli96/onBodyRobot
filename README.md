@@ -34,7 +34,7 @@ ESP32_IP = "192.168.x.x"
 ESP32_PORT = 3333
 ```
 
-Set ROBOT_IP to the ESP32’s WiFi IP (printed in the Serial Monitor after the robot connects).
+Set ESP32_IP to the ESP32’s WiFi IP (printed in the Serial Monitor after the robot connects).
 
 ## 🌐 Step 4 — Run the Local Server
 
