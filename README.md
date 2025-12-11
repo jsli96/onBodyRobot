@@ -30,8 +30,8 @@ When the board boots, check the Serial Monitor — it will print the new assigne
 In `server.py`, update:
 
 ```python
-ROBOT_IP = "192.168.x.x"
-ROBOT_PORT = 3333
+ESP32_IP = "192.168.x.x"
+ESP32_PORT = 3333
 ```
 
 Set ROBOT_IP to the ESP32’s WiFi IP (printed in the Serial Monitor after the robot connects).
