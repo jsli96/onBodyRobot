@@ -80,6 +80,8 @@ http://10.175.8.103:5001
 - If you need to modify the **UI**, most front-end files are located inside the **`data/`** folder.  
 - The primary entry point for UI updates is **`index.html`**, where you can adjust layout, buttons, styling, and Blockly behavior.  
 - Any images or assets displayed on the robot’s screen are typically stored in the **`pics/`** directory.  
-- To **add a new picture to the robot**, open the UI → go to **Settings** → click the **“Load picture file”** icon. This will let you choose an image from your computer and upload it to SPIFFS.  
+- To **add a new picture to the robot**, open the UI → go to **Options (3 dots on the top left)** → click the **“Load picture file”** icon. This will let you choose an image from your computer and upload it to SPIFFS.  
 - After making UI changes, simply refresh the browser — no need to restart the server unless backend logic was modified.
+- Commands are sent **over WiFi**, so the robot **does not need to be physically plugged into the same laptop** that is controlling it. It only needs to be connected to **a power source** and successfully joined to the same WiFi network.  
+
 
