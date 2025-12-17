@@ -174,11 +174,15 @@ void scanForImageFiles() {
   }
 }
 
-void PNGDrawCallback(PNGDRAW *pDraw) {
-  if (pDraw->y >= 240) return;
+int PNGDrawCallback(PNGDRAW *pDraw) {
+  if (pDraw->y >= 240) return 1;  // ignore lines past screen
+
   uint16_t *dest = &rawImage[pDraw->y * imgWidth];
   png.getLineAsRGB565(pDraw, dest, PNG_RGB565_BIG_ENDIAN, 0xFFFFFFFF);
+
+  return 1; // keep decoding
 }
+
 
 void showImageFromSPIFFS_Stream(const char* filename) {
   if (isDecoding) {
