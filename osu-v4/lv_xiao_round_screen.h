@@ -198,3 +198,4 @@ void lv_xiao_touch_init(void)
     lv_indev_drv_register(&indev_drv);
 #endif
 }
+

@@ -57,8 +57,8 @@ IPAddress subnet(255, 255, 255, 0);     // Subnet mask
 IPAddress primaryDNS(8, 8, 8, 8);        // DNS
 IPAddress secondaryDNS(8, 8, 4, 4);      // Secondary DNS
 
-const char* ssid = "atp236";
-const char* password = "88888888";
+const char* ssid = "Verizon_B4TKXX";
+const char* password = "fox3-veto-dun";
 
 // --------------------- Global Variables ---------------------
 std::vector<String> imageFiles;  // To store filenames found in SPIFFS
@@ -175,14 +175,14 @@ void scanForImageFiles() {
 }
 
 int PNGDrawCallback(PNGDRAW *pDraw) {
-  if (pDraw->y >= 240) return 1;  // ignore lines past screen
+  if (pDraw->y >= 240) return 1;
 
-  uint16_t *dest = &rawImage[pDraw->y * imgWidth];
+  uint16_t *dest = &rawImage[pDraw->y * 240];
+
   png.getLineAsRGB565(pDraw, dest, PNG_RGB565_BIG_ENDIAN, 0xFFFFFFFF);
 
-  return 1; // keep decoding
+  return 1;
 }
-
 
 void showImageFromSPIFFS_Stream(const char* filename) {
   if (isDecoding) {
@@ -393,7 +393,9 @@ void setup() {
   Serial.print("Setup task running on core "); Serial.println(xPortGetCoreID());
 
   // TFT
+  Serial.println("A: before tft.init");
   tft.init();
+  Serial.println("B: after tft.init");
   tft.setRotation(0);
   tft.fillScreen(TFT_BLACK);
 
