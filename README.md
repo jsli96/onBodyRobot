@@ -1,4 +1,34 @@
-## 🛠 Step 1 — Install Python Dependencies
+## 🛠 Step 1 — Install Arduino Library Dependencies
+This project requires several Arduino libraries to be installed before uploading firmware to the ESP32-S3.
+
+A bundled archive of all required libraries is provided as:
+```python
+libraries.zip
+```
+✅ Option A — Install via ZIP (Recommended)
+
+1. Unzip libraries.zip
+2. Copy the extracted folders into your Arduino libraries directory:
+
+On macOS, you can do:
+```bash
+unzip libraries.zip
+cp -R libraries/* ~/Documents/Arduino/libraries/
+```
+
+3. Restart the Arduino IDE completely
+4. Open osu-v4.ino and verify it compiles without missing-library errors
+
+✅ Option B — Install Manually via Arduino Library Manager
+
+If you prefer manual installation, ensure all required libraries used by the firmware are installed via:
+
+```nginx
+Arduino IDE → Tools → Manage Libraries
+```
+⚠️ Missing libraries will cause compile errors when uploading to the ESP32.
+
+## 🛠 Step 2 — Install Python Dependencies
 
 Inside the **OSU-V4** folder, run:
 
@@ -12,7 +42,7 @@ This installs:
 - **requests** — used for sending HTTP requests  
 - **werkzeug** — utilities used internally by Flask
 
-## 🔧 Step 2 — Update WiFi / Hotspot Credentials (On the ESP32)
+## 🔧 Step 3 — Update WiFi / Hotspot Credentials (On the ESP32)
 
 In `osu-v4.ino`, modify:
 
@@ -25,7 +55,7 @@ Re-upload the firmware to the ESP32.
 
 When the board boots, check the Serial Monitor — it will print the new assigned IP address, which must match the ROBOT_IP in server.py (next step).
 
-## 🔧 Step 3 — Update the Robot IP 
+## 🔧 Step 4 — Update the Robot IP 
 
 In `server.py`, update:
 
@@ -36,7 +66,7 @@ ESP32_PORT = 3333
 
 Set ESP32_IP to the ESP32’s WiFi IP (printed in the Serial Monitor after the robot connects).
 
-## 🌐 Step 4 — Run the Local Server
+## 🌐 Step 5 — Run the Local Server
 
 The project includes a Flask backend that:
 
