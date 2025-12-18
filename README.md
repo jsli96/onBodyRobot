@@ -105,12 +105,29 @@ Example:
 http://10.175.8.103:5001
 ```
 
+## 🗑️ Reset / Clear Uploaded Pictures (SPIFFS)
+
+By default, uploaded images are stored persistently in SPIFFS and will remain on the ESP32 across reboots.
+
+If you want to **delete all uploaded pictures** and start fresh:
+
+1. Open the osu-v4.ino.
+2. Locate the SPIFFS initialization code:
+   ```cpp
+   if (!SPIFFS.begin(true)) {  
+     Serial.println("Failed to mount SPIFFS");
+     return;
+   }
+   Serial.println("SPIFFS mounted successfully.");
+
+   // clearSPIFFS();  // ← Uncomment to delete all images
+
 ## 📝 Notes
 
 - If you need to modify the **UI**, most front-end files are located inside the **`data/`** folder.  
 - The primary entry point for UI updates is **`index.html`**, where you can adjust layout, buttons, styling, and Blockly behavior.  
 - Any images or assets displayed on the robot’s screen are typically stored in the **`pics/`** directory.  
-- To **add a new picture to the robot**, open the UI → go to **Options (3 dots on the top left)** → click the **“Load picture file”** icon. This will let you choose an image from your computer and upload it to SPIFFS.  
+- To **add a new picture to the robot**, open the UI → go to **Options (3 dots on the top left)** → click the **“Load picture file”** icon. This will let you choose an image from your computer and upload it to SPIFFS.
 - After making UI changes, simply refresh the browser — no need to restart the server unless backend logic was modified.
 - Commands are sent **over WiFi**, so the robot **does not need to be physically plugged into the same laptop** that is controlling it. It only needs to be connected to **a power source** and successfully joined to the same WiFi network.  
 
