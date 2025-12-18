@@ -373,6 +373,15 @@ void setup() {
   }
   Serial.println("SPIFFS mounted successfully.");
 
+
+// OPTIONAL: Clear all images/files stored in SPIFFS
+// Uncomment the line below and recompile/upload if you want
+// to completely reset SPIFFS (remove all uploaded pictures).
+//
+// Note: Leaving this uncommented will DELETE files on EVERY boot.
+//
+// clearSPIFFS();
+
   scanForImageFiles();
   Serial.printf("Found %d image(s).\n", (int)imageFiles.size());
 
