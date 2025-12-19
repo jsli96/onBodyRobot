@@ -4,28 +4,12 @@ This project requires several Arduino libraries to be installed before uploading
 A bundled archive of all required libraries is provided as:
 ```python
 libraries.zip
-```
-✅ Option A — Install via ZIP (Recommended)
 
-1. Unzip libraries.zip
-2. Copy the extracted folders into your Arduino libraries directory:
-
-On macOS, you can do:
-```bash
-unzip libraries.zip
-cp -R libraries/* ~/Documents/Arduino/libraries/
-```
-
+1. Download and unzip libraries.zip
+2. Copy the extracted folders into your Arduino libraries directory
 3. Restart the Arduino IDE completely
 4. Open osu-v4.ino and verify it compiles without missing-library errors
 
-✅ Option B — Install Manually via Arduino Library Manager
-
-If you prefer manual installation, ensure all required libraries used by the firmware are installed via:
-
-```nginx
-Arduino IDE → Tools → Manage Libraries
-```
 ⚠️ Missing libraries will cause compile errors when uploading to the ESP32.
 
 ## 🛠 Step 2 — Install Python Dependencies
