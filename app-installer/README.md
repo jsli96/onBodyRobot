@@ -1,6 +1,8 @@
-# Calico App Installer Guide
+# Calico App Installer Guide (Please Read)
 
-This is a guide to package the Calico project into a user-friendly application.
+This is a guide to package the Calico project into a user-friendly application. If you are a developer who would like to replicate the work, please continue with the steps below. If you are an end-user, please skip to the bottom where it says **For End-Users**.
+
+# For Developers
 
 ## Purpose
 
@@ -223,7 +225,7 @@ pyinstaller --onefile --add-binary "osu_server:." --hidden-import=flask Calico_L
 
 Now, you should be able to find `Calico_Installer` and `Calico_Launcher` inside the `dist` folder. These are the applications that let end users set up the wifi credentials (Installer) and launch the Calico server (Launcher). Run the `Calico_Installer` first before `Calico_Launcher`. If users change locations, they can run the `Calico_Installer` again to enter the new wifi credentials, which should skip the entire downloading of the `osu-v4` folder and straight to entering new wifi credentials.
 
-# Alternative Path
+# For End-Users
 
 ## Download
 
@@ -243,3 +245,5 @@ Download:
 
 - `Calico_Installer`
 - `Calico_Launcher`
+
+Once downloaded, make sure you connect your laptop device to the Calico robot first, then you can launch the first application `Calico_Installer` to set up wifi credentials, and then launch the second application `Calico_Launcher` to open Calico's server. If wifi's location changes, run the `Calico_Installer` again to enter the new wifi credentials, which should skip the entire downloading of the `osu-v4` folder and straight to entering new wifi credentials. Then launch `Calico_Launcher` again.
