@@ -230,7 +230,7 @@ Now, you should be able to find `Calico_Installer` and `Calico_Launcher` inside 
 ## Download
 
 Download the appropriate version for your operating system from the
-[latest GitHub Release](../../releases).
+[latest GitHub Release](../../releases). The files are available under **Assets**.
 
 ### Windows
 
@@ -247,3 +247,5 @@ Download:
 - `Calico_Launcher`
 
 Once downloaded, make sure you connect your laptop device to the Calico robot first, then you can launch the first application `Calico_Installer` to set up wifi credentials, and then launch the second application `Calico_Launcher` to open Calico's server. If wifi's location changes, run the `Calico_Installer` again to enter the new wifi credentials, which should skip the entire downloading of the `osu-v4` folder and straight to entering new wifi credentials. Then launch `Calico_Launcher` again.
+
+> **Note:** On Windows, if you got a message such as `Windows protected your PC` with a button `Don't run`, click on `More Info` and a button called `Run Anyway` will pop up. Click on `Run Anyway` to allow the apps to launch.
